@@ -20,3 +20,33 @@ test('GET /api/health returns unified ok response without sensitive data', async
     await new Promise((resolve) => server.close(resolve))
   }
 })
+
+test('POST /api/routes/plan returns polyline plan without amap web key', async () => {
+  const server = app.listen(0)
+
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}/api/routes/plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        travelMode: 'polyline',
+        points: [
+          { longitude: 120.1, latitude: 30.1 },
+          { longitude: 120.2, latitude: 30.2 },
+        ],
+      }),
+    })
+    const payload = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(payload.code, 0)
+    assert.equal(payload.data.travelMode, 'polyline')
+    assert.deepEqual(payload.data.segments[0].path, [
+      [120.1, 30.1],
+      [120.2, 30.2],
+    ])
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})

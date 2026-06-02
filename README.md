@@ -28,6 +28,7 @@ VITE_AMAP_SECURITY_CODE=你的高德安全密钥
 DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:55432/gonglui?schema=public"
 PORT=3001
 UPLOAD_DIR="uploads"
+AMAP_WEB_SERVICE_KEY="你的高德Web服务KEY"
 ```
 
 注意：
@@ -35,6 +36,7 @@ UPLOAD_DIR="uploads"
 - 不要提交 `.env.local`
 - 不要提交 `server/.env`
 - 不要提交真实高德 Key
+- `AMAP_WEB_SERVICE_KEY` 只给后端读取，用于高德 Web 服务驾车/步行路线规划，不能放到前端环境变量里
 
 ## 数据库启动方式
 
@@ -105,6 +107,9 @@ npm test
 - 地点输入解析
 - 高德地图 Marker
 - 简单折线
+- 驾车真实路线规划
+- 步行真实路线规划
+- 多地点路线分段
 - 地点详情
 - 备注
 - 本地图片预览
@@ -114,10 +119,15 @@ npm test
 - 图片上传
 - 图片删除
 
+## 路线模式
+
+- 简单连线：按相邻地点直接绘制直线，不需要高德 Web 服务 Key。
+- 驾车路线：通过后端 `AMAP_WEB_SERVICE_KEY` 请求高德 Web 服务；超过 18 个地点时会自动分段，保持前后段连续。
+- 步行路线：通过后端 `AMAP_WEB_SERVICE_KEY` 按相邻地点逐段规划，不使用途经点。
+- 失败段：高德规划失败或返回数据不完整时，该段会回退为直线，地图仍显示完整路线。
+
 ## 未实现功能
 
-- 真实驾车/步行路线规划
-- 多地点分段规划
 - 分享页
 - 登录权限
 - 对象存储

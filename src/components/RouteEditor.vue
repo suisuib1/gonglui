@@ -1,7 +1,16 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { getAmapConfig, searchPlaceByName } from '../services/amapLoader'
-import { createRoute, deleteImage, getRoute, listRoutes, updatePlaceNote, updateRoute, uploadPlaceImage } from '../services/routeApi'
+import {
+  createRoute,
+  deleteImage,
+  getRoute,
+  listRoutes,
+  planRoute,
+  updatePlaceNote,
+  updateRoute,
+  uploadPlaceImage,
+} from '../services/routeApi'
 import { clearDraft, loadDraft, saveDraft } from '../utils/storage'
 import { createPendingPlaces, parsePlaceNames } from '../utils/placeParser'
 import MapView from './MapView.vue'
@@ -11,7 +20,9 @@ import PlaceList from './PlaceList.vue'
 const routeTitle = ref('杭州打卡路线')
 const city = ref('杭州')
 const rawPlacesText = ref('西湖\n灵隐寺，法喜寺、河坊街\n城市阳台')
+const travelMode = ref('polyline')
 const places = ref([])
+const plannedSegments = ref([])
 const activePlaceId = ref('')
 const resolving = ref(false)
 const notice = ref('')
@@ -30,7 +41,9 @@ onMounted(() => {
   routeTitle.value = draft.routeTitle || routeTitle.value
   city.value = draft.city || city.value
   rawPlacesText.value = draft.rawPlacesText || rawPlacesText.value
+  travelMode.value = draft.travelMode || travelMode.value
   places.value = Array.isArray(draft.places) ? draft.places : []
+  plannedSegments.value = Array.isArray(draft.plannedSegments) ? draft.plannedSegments : []
   serverRouteId.value = draft.serverRouteId || ''
   notice.value = draft.updatedAt ? `已读取草稿，最后保存于 ${formatDate(draft.updatedAt)}` : '已读取草稿。'
 })
@@ -38,6 +51,7 @@ onMounted(() => {
 async function generateRoute() {
   notice.value = ''
   error.value = ''
+  plannedSegments.value = []
 
   const names = parsePlaceNames(rawPlacesText.value)
   if (!names.length) {
@@ -100,9 +114,48 @@ async function generateRoute() {
     }
   }
 
-  resolving.value = false
+  places.value = resolved
   const failedCount = resolved.filter((place) => place.status === 'failed').length
-  notice.value = failedCount ? `路线已生成，其中 ${failedCount} 个地点解析失败。` : '路线已生成。'
+  const baseNotice = failedCount ? `路线已生成，其中 ${failedCount} 个地点解析失败。` : '路线已生成。'
+
+  try {
+    const plan = await planCurrentRoute(resolved)
+    notice.value = buildPlanNotice(baseNotice, plan)
+  } catch (err) {
+    plannedSegments.value = []
+    notice.value = `${baseNotice} 路线规划失败，已使用简单连线兜底。`
+    error.value = err.message || '路线规划失败。'
+  } finally {
+    resolving.value = false
+  }
+}
+
+async function planCurrentRoute(sourcePlaces) {
+  const routePoints = sourcePlaces
+    .filter((place) => place.status === 'success' && Number.isFinite(place.lng) && Number.isFinite(place.lat))
+    .map((place) => ({
+      name: place.name || place.inputName,
+      longitude: place.lng,
+      latitude: place.lat,
+    }))
+
+  if (routePoints.length < 2) {
+    plannedSegments.value = []
+    return null
+  }
+
+  const plan = await planRoute({
+    travelMode: travelMode.value,
+    points: routePoints,
+  })
+  plannedSegments.value = Array.isArray(plan.segments) ? plan.segments : []
+  return plan
+}
+
+function buildPlanNotice(baseNotice, plan) {
+  if (!plan) return `${baseNotice} 可规划地点不足 2 个，地图保留点位。`
+  if (plan.fallbackUsed) return `${baseNotice} 部分路段已回退为直线。`
+  return `${baseNotice} 已生成${travelModeText(travelMode.value)}。`
 }
 
 function replaceAtOrder(currentPlaces, nextPlace) {
@@ -183,7 +236,7 @@ async function loadRouteFromServer(routeId) {
     const route = await getRoute(routeId)
     applyServerRoute(route)
     saveCurrentDraft()
-    notice.value = '已加载服务器路线。'
+    notice.value = '已加载服务器路线。重新点击“生成路线”可刷新真实路线。'
   } catch (err) {
     error.value = err.message || '加载路线详情失败。'
   }
@@ -246,7 +299,9 @@ function applyServerRoute(route, options = {}) {
   serverRouteId.value = route.id
   routeTitle.value = route.title || routeTitle.value
   city.value = route.city || city.value
+  travelMode.value = route.travelMode || 'polyline'
   places.value = mergeLocalImages(Array.isArray(route.places) ? route.places : [], options.preserveLocalImagesFrom)
+  plannedSegments.value = []
   rawPlacesText.value = places.value.map((place) => place.inputName || place.name).join('\n')
   activePlaceId.value = ''
 }
@@ -270,7 +325,7 @@ function buildRoutePayload() {
   return {
     title: routeTitle.value,
     city: city.value,
-    travelMode: 'polyline',
+    travelMode: travelMode.value,
     places: places.value.map((place, index) => ({
       id: isServerPlaceId(place.id) ? place.id : undefined,
       name: place.name || place.inputName,
@@ -290,7 +345,9 @@ function saveCurrentDraft() {
     routeTitle: routeTitle.value,
     city: city.value,
     rawPlacesText: rawPlacesText.value,
+    travelMode: travelMode.value,
     places: places.value,
+    plannedSegments: plannedSegments.value,
     serverRouteId: serverRouteId.value,
   })
 
@@ -309,11 +366,19 @@ function clearCurrentDraft() {
   routeTitle.value = '杭州打卡路线'
   city.value = '杭州'
   rawPlacesText.value = ''
+  travelMode.value = 'polyline'
   places.value = []
+  plannedSegments.value = []
   serverRouteId.value = ''
   activePlaceId.value = ''
   notice.value = '草稿已清空。'
   error.value = ''
+}
+
+function travelModeText(mode) {
+  if (mode === 'driving') return '驾车路线'
+  if (mode === 'walking') return '步行路线'
+  return '简单连线'
 }
 
 function isServerPlaceId(value) {
@@ -350,6 +415,15 @@ function formatDate(value) {
       </label>
 
       <label class="field">
+        <span>路线模式</span>
+        <select v-model="travelMode">
+          <option value="polyline">简单连线</option>
+          <option value="driving">驾车路线</option>
+          <option value="walking">步行路线</option>
+        </select>
+      </label>
+
+      <label class="field">
         <span>地点</span>
         <textarea
           v-model="rawPlacesText"
@@ -370,6 +444,14 @@ function formatDate(value) {
         </button>
         <button class="ghost-button" type="button" @click="clearCurrentDraft">清空草稿</button>
       </div>
+
+      <section class="route-plan-status">
+        <span class="section-title">路线状态</span>
+        <div class="route-mode-pill">{{ travelModeText(travelMode) }}</div>
+        <small v-if="plannedSegments.length">
+          {{ plannedSegments.length }} 个路段，{{ plannedSegments.filter((segment) => segment.fallback).length }} 个直线回退
+        </small>
+      </section>
 
       <section class="saved-routes">
         <div class="saved-routes-header">
@@ -399,7 +481,12 @@ function formatDate(value) {
     </aside>
 
     <section class="workspace">
-      <MapView :places="places" :active-place-id="activePlaceId" @select-place="selectPlace" />
+      <MapView
+        :places="places"
+        :active-place-id="activePlaceId"
+        :planned-segments="plannedSegments"
+        @select-place="selectPlace"
+      />
       <PlaceDetailPanel
         :place="activePlace"
         :server-route-id="serverRouteId"

@@ -11,6 +11,10 @@ const props = defineProps({
     type: String,
     default: '',
   },
+  plannedSegments: {
+    type: Array,
+    default: () => [],
+  },
 })
 
 const emit = defineEmits(['select-place'])
@@ -36,7 +40,7 @@ onBeforeUnmount(() => {
 })
 
 watch(
-  () => props.places,
+  () => [props.places, props.plannedSegments],
   () => {
     if (mapReady.value) renderPlaces()
   },
@@ -110,9 +114,11 @@ function renderPlaces() {
     return marker
   })
 
-  if (points.length >= 2) {
+  const routePath = getRoutePath(points)
+
+  if (routePath.length >= 2) {
     polyline = new window.AMap.Polyline({
-      path: points.map((place) => [place.lng, place.lat]),
+      path: routePath,
       strokeColor: '#2563eb',
       strokeWeight: 5,
       strokeOpacity: 0.85,
@@ -122,10 +128,16 @@ function renderPlaces() {
   }
 
   if (points.length) {
-    map.setFitView(markers, false, [60, 60, 60, 60])
+    map.setFitView([...markers, ...(polyline ? [polyline] : [])], false, [60, 60, 60, 60])
   }
 
   renderMarkerStates()
+}
+
+function getRoutePath(points) {
+  const plannedPath = props.plannedSegments.flatMap((segment) => (Array.isArray(segment.path) ? segment.path : []))
+  if (plannedPath.length >= 2) return plannedPath
+  return points.map((place) => [place.lng, place.lat])
 }
 
 function renderMarkerStates() {
