@@ -1,9 +1,10 @@
 import { Router } from 'express'
 import { deleteImage } from '../controllers/imagesController.js'
 import { updatePlaceNote, uploadPlaceImage as uploadPlaceImageController } from '../controllers/placesController.js'
+import { deleteRoute } from '../controllers/routeDeleteController.js'
 import { optimizeRouteController } from '../controllers/routeOptimizeController.js'
 import { planRouteController } from '../controllers/routePlanController.js'
-import { createRoute, deleteRoute, getRoute, listRoutes, updateRoute } from '../controllers/routesController.js'
+import { createRoute, getRoute, listRoutes, updateRoute } from '../controllers/routesController.js'
 import { uploadPlaceImage, validateUploadPlaceId } from '../middlewares/upload.js'
 
 export const apiRouter = Router()
