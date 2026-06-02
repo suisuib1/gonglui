@@ -6,6 +6,17 @@ import { uploadPlaceImage, validateUploadPlaceId } from '../middlewares/upload.j
 
 export const apiRouter = Router()
 
+apiRouter.get('/health', (req, res) => {
+  res.json({
+    code: 0,
+    message: 'ok',
+    data: {
+      status: 'ok',
+      time: new Date().toISOString(),
+    },
+  })
+})
+
 apiRouter.post('/routes', createRoute)
 apiRouter.get('/routes', listRoutes)
 apiRouter.get('/routes/:id', getRoute)
