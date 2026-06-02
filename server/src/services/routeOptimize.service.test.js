@@ -54,6 +54,21 @@ test('falls back to straight-line distance for failed pairs without failing opti
   assert.equal(JSON.stringify(result).includes('secret-key'), false)
 })
 
+test('throttles amap pair requests when a pair delay is configured', async () => {
+  const delays = []
+  const fetchImpl = async () => jsonResponse(amapSuccess(10, 5))
+  const sleepImpl = async (delayMs) => {
+    delays.push(delayMs)
+  }
+
+  await optimizeRoute(
+    { travelMode: 'walking', points: points.slice(0, 3) },
+    { key: 'secret-key', fetchImpl, pairDelayMs: 123, sleepImpl },
+  )
+
+  assert.deepEqual(delays, [123, 123, 123, 123, 123])
+})
+
 test('handles 11 to 20 points with a complete heuristic order', async () => {
   const manyPoints = Array.from({ length: 12 }, (_, index) => ({
     name: `P${index}`,

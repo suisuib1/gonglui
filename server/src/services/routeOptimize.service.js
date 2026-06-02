@@ -2,6 +2,7 @@ const TRAVEL_MODES = new Set(['polyline', 'driving', 'walking'])
 const AMAP_ORIGIN = 'https://restapi.amap.com'
 const REQUEST_TIMEOUT_MS = 9000
 const MAX_POINTS = 20
+const DEFAULT_AMAP_PAIR_DELAY_MS = 1000
 
 export class RouteOptimizeError extends Error {
   constructor(message, code = 400) {
@@ -51,10 +52,14 @@ async function buildCostMatrix(mode, points, options) {
   const costs = Array.from({ length: points.length }, () => Array(points.length).fill(null))
   let pairCount = 0
   let fallbackPairCount = 0
+  const pairDelayMs = resolvePairDelayMs(mode, options)
 
   for (let fromIndex = 0; fromIndex < points.length; fromIndex += 1) {
     for (let toIndex = 0; toIndex < points.length; toIndex += 1) {
       if (fromIndex === toIndex) continue
+      if (pairCount > 0 && pairDelayMs > 0) {
+        await sleep(pairDelayMs, options)
+      }
       pairCount += 1
       const cost = await getPairRouteCost(mode, points[fromIndex], points[toIndex], options)
       if (cost.fallback) fallbackPairCount += 1
@@ -250,6 +255,30 @@ function normalizePoint(point, index) {
       latitude: roundCoordinate(latitude),
     },
   }
+}
+
+function resolvePairDelayMs(mode, options) {
+  if (mode === 'polyline') return 0
+
+  if (Number.isFinite(options.pairDelayMs)) {
+    return Math.max(0, Number(options.pairDelayMs))
+  }
+
+  if (options.fetchImpl) {
+    return 0
+  }
+
+  const envDelayMs = Number(process.env.AMAP_ROUTE_OPTIMIZE_PAIR_DELAY_MS)
+  if (Number.isFinite(envDelayMs)) {
+    return Math.max(0, envDelayMs)
+  }
+
+  return DEFAULT_AMAP_PAIR_DELAY_MS
+}
+
+function sleep(delayMs, options) {
+  const sleepImpl = options.sleepImpl || ((ms) => new Promise((resolve) => setTimeout(resolve, ms)))
+  return sleepImpl(delayMs)
 }
 
 function fallbackCost(distance) {
