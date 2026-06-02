@@ -92,6 +92,20 @@ h2 {
   min-width: 144px;
 }
 
+.check-field {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  color: #364255;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.check-field input {
+  width: 18px;
+  height: 18px;
+}
+
 input,
 textarea,
 select {

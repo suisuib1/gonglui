@@ -50,3 +50,31 @@ test('POST /api/routes/plan returns polyline plan without amap web key', async (
     await new Promise((resolve) => server.close(resolve))
   }
 })
+
+test('POST /api/routes/optimize returns optimized order without amap web key for polyline', async () => {
+  const server = app.listen(0)
+
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}/api/routes/optimize`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        travelMode: 'polyline',
+        points: [
+          { name: 'A', longitude: 120, latitude: 30 },
+          { name: 'B', longitude: 120.2, latitude: 30 },
+          { name: 'C', longitude: 120.05, latitude: 30 },
+        ],
+      }),
+    })
+    const payload = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(payload.code, 0)
+    assert.equal(payload.data.optimizedOrder[0], 0)
+    assert.deepEqual([...payload.data.optimizedOrder].sort((a, b) => a - b), [0, 1, 2])
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})

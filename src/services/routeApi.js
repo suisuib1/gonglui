@@ -29,6 +29,13 @@ export function planRoute(payload) {
   })
 }
 
+export function optimizeRoute(payload) {
+  return apiRequest('/api/routes/optimize', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+}
+
 export function updatePlaceNote(id, note) {
   return apiRequest(`/api/places/${id}/note`, {
     method: 'PATCH',

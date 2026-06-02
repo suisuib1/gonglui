@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { deleteImage } from '../controllers/imagesController.js'
 import { updatePlaceNote, uploadPlaceImage as uploadPlaceImageController } from '../controllers/placesController.js'
+import { optimizeRouteController } from '../controllers/routeOptimizeController.js'
 import { planRouteController } from '../controllers/routePlanController.js'
 import { createRoute, deleteRoute, getRoute, listRoutes, updateRoute } from '../controllers/routesController.js'
 import { uploadPlaceImage, validateUploadPlaceId } from '../middlewares/upload.js'
@@ -19,6 +20,7 @@ apiRouter.get('/health', (req, res) => {
 })
 
 apiRouter.post('/routes', createRoute)
+apiRouter.post('/routes/optimize', optimizeRouteController)
 apiRouter.post('/routes/plan', planRouteController)
 apiRouter.get('/routes', listRoutes)
 apiRouter.get('/routes/:id', getRoute)

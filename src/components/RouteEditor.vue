@@ -6,6 +6,7 @@ import {
   deleteImage,
   getRoute,
   listRoutes,
+  optimizeRoute,
   planRoute,
   updatePlaceNote,
   updateRoute,
@@ -21,6 +22,8 @@ const routeTitle = ref('杭州打卡路线')
 const city = ref('杭州')
 const rawPlacesText = ref('西湖\n灵隐寺，法喜寺、河坊街\n城市阳台')
 const travelMode = ref('polyline')
+const smartSortEnabled = ref(false)
+const sortResult = ref(null)
 const places = ref([])
 const plannedSegments = ref([])
 const activePlaceId = ref('')
@@ -42,6 +45,8 @@ onMounted(() => {
   city.value = draft.city || city.value
   rawPlacesText.value = draft.rawPlacesText || rawPlacesText.value
   travelMode.value = draft.travelMode || travelMode.value
+  smartSortEnabled.value = Boolean(draft.smartSortEnabled)
+  sortResult.value = draft.sortResult || null
   places.value = Array.isArray(draft.places) ? draft.places : []
   plannedSegments.value = Array.isArray(draft.plannedSegments) ? draft.plannedSegments : []
   serverRouteId.value = draft.serverRouteId || ''
@@ -52,6 +57,7 @@ async function generateRoute() {
   notice.value = ''
   error.value = ''
   plannedSegments.value = []
+  sortResult.value = null
 
   const names = parsePlaceNames(rawPlacesText.value)
   if (!names.length) {
@@ -114,20 +120,67 @@ async function generateRoute() {
     }
   }
 
-  places.value = resolved
+  let nextPlaces = resolved
   const failedCount = resolved.filter((place) => place.status === 'failed').length
-  const baseNotice = failedCount ? `路线已生成，其中 ${failedCount} 个地点解析失败。` : '路线已生成。'
+  let baseNotice = failedCount ? `路线已生成，其中 ${failedCount} 个地点解析失败。` : '路线已生成。'
+
+  if (smartSortEnabled.value) {
+    try {
+      const optimized = await optimizeCurrentRoute(resolved)
+      if (optimized) {
+        sortResult.value = optimized
+        nextPlaces = reorderPlacesByOptimizedOrder(resolved, optimized.optimizedOrder)
+        rawPlacesText.value = nextPlaces.map((place) => place.inputName || place.name).join('\n')
+        baseNotice = `${baseNotice} 已根据预计耗时重新排序。`
+      }
+    } catch (err) {
+      error.value = err.message || '智能排序失败，已保留原顺序。'
+      baseNotice = `${baseNotice} 智能排序失败，已保留原顺序。`
+    }
+  }
+
+  places.value = nextPlaces
 
   try {
-    const plan = await planCurrentRoute(resolved)
+    const plan = await planCurrentRoute(nextPlaces)
     notice.value = buildPlanNotice(baseNotice, plan)
   } catch (err) {
     plannedSegments.value = []
     notice.value = `${baseNotice} 路线规划失败，已使用简单连线兜底。`
-    error.value = err.message || '路线规划失败。'
+    error.value = error.value || err.message || '路线规划失败。'
   } finally {
     resolving.value = false
   }
+}
+
+async function optimizeCurrentRoute(sourcePlaces) {
+  const routePlaces = sourcePlaces.filter((place) => place.status === 'success' && Number.isFinite(place.lng) && Number.isFinite(place.lat))
+
+  if (routePlaces.length < 2) return null
+
+  return optimizeRoute({
+    travelMode: travelMode.value,
+    points: routePlaces.map((place) => ({
+      name: place.name || place.inputName,
+      longitude: place.lng,
+      latitude: place.lat,
+    })),
+    options: {
+      fixedStart: true,
+      returnToStart: false,
+      objective: 'duration',
+    },
+  })
+}
+
+function reorderPlacesByOptimizedOrder(sourcePlaces, optimizedOrder) {
+  const successPlaces = sourcePlaces.filter((place) => place.status === 'success' && Number.isFinite(place.lng) && Number.isFinite(place.lat))
+  const failedPlaces = sourcePlaces.filter((place) => !(place.status === 'success' && Number.isFinite(place.lng) && Number.isFinite(place.lat)))
+  const orderedSuccess = optimizedOrder.map((index) => successPlaces[index]).filter(Boolean)
+  return [...orderedSuccess, ...failedPlaces].map((place, index) => ({
+    ...place,
+    order: index + 1,
+  }))
 }
 
 async function planCurrentRoute(sourcePlaces) {
@@ -302,6 +355,7 @@ function applyServerRoute(route, options = {}) {
   travelMode.value = route.travelMode || 'polyline'
   places.value = mergeLocalImages(Array.isArray(route.places) ? route.places : [], options.preserveLocalImagesFrom)
   plannedSegments.value = []
+  sortResult.value = null
   rawPlacesText.value = places.value.map((place) => place.inputName || place.name).join('\n')
   activePlaceId.value = ''
 }
@@ -346,6 +400,8 @@ function saveCurrentDraft() {
     city: city.value,
     rawPlacesText: rawPlacesText.value,
     travelMode: travelMode.value,
+    smartSortEnabled: smartSortEnabled.value,
+    sortResult: sortResult.value,
     places: places.value,
     plannedSegments: plannedSegments.value,
     serverRouteId: serverRouteId.value,
@@ -367,12 +423,18 @@ function clearCurrentDraft() {
   city.value = '杭州'
   rawPlacesText.value = ''
   travelMode.value = 'polyline'
+  smartSortEnabled.value = false
+  sortResult.value = null
   places.value = []
   plannedSegments.value = []
   serverRouteId.value = ''
   activePlaceId.value = ''
   notice.value = '草稿已清空。'
   error.value = ''
+}
+
+function formatOrder(order) {
+  return order.map((index) => index + 1).join(' -> ')
 }
 
 function travelModeText(mode) {
@@ -423,6 +485,11 @@ function formatDate(value) {
         </select>
       </label>
 
+      <label class="check-field">
+        <input v-model="smartSortEnabled" type="checkbox" />
+        <span>智能排序，固定第一个地点为起点</span>
+      </label>
+
       <label class="field">
         <span>地点</span>
         <textarea
@@ -450,6 +517,12 @@ function formatDate(value) {
         <div class="route-mode-pill">{{ travelModeText(travelMode) }}</div>
         <small v-if="plannedSegments.length">
           {{ plannedSegments.length }} 个路段，{{ plannedSegments.filter((segment) => segment.fallback).length }} 个直线回退
+        </small>
+        <small v-if="sortResult">
+          原顺序：{{ formatOrder(sortResult.originalOrder) }}
+        </small>
+        <small v-if="sortResult">
+          推荐顺序：{{ formatOrder(sortResult.optimizedOrder) }}
         </small>
       </section>
 
