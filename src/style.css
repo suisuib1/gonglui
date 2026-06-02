@@ -159,6 +159,12 @@ select:focus {
   background: #dde5ef;
 }
 
+.ghost-button.small {
+  min-height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
 .icon-button {
   display: grid;
   width: 36px;
@@ -195,6 +201,48 @@ select:focus {
   color: #364255;
   font-size: 14px;
   font-weight: 800;
+}
+
+.saved-routes {
+  display: grid;
+  gap: 8px;
+}
+
+.saved-routes-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.saved-routes-header .section-title {
+  margin-bottom: 0;
+}
+
+.saved-route-list {
+  display: grid;
+  gap: 8px;
+}
+
+.saved-route-card {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  padding: 10px;
+  color: inherit;
+  text-align: left;
+  background: #fff;
+}
+
+.saved-route-card:hover {
+  border-color: #2563eb;
+  box-shadow: 0 8px 22px rgba(37, 99, 235, 0.12);
+}
+
+.saved-route-card small {
+  color: #64748b;
 }
 
 .place-list {

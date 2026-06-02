@@ -5,6 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite --configLoader native",
+    "dev:client": "vite --configLoader native",
+    "dev:server": "npm --prefix server run dev",
     "build": "vite build --configLoader native",
     "preview": "vite preview --configLoader native"
   },

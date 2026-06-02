@@ -1,16 +1,27 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 
-const MAX_IMAGE_SIZE = 1 * 1024 * 1024
+const MAX_IMAGE_SIZE = 5 * 1024 * 1024
 
 const props = defineProps({
   place: {
     type: Object,
     default: null,
   },
+  serverRouteId: {
+    type: String,
+    default: '',
+  },
 })
 
-const emit = defineEmits(['append-place-image', 'close', 'update-place'])
+const emit = defineEmits([
+  'append-place-image',
+  'close',
+  'delete-place-image',
+  'save-place-note',
+  'update-place',
+  'upload-place-image',
+])
 
 const imageType = ref('scenery')
 const imageError = ref('')
@@ -18,6 +29,7 @@ const fileInput = ref(null)
 const noteDraft = ref('')
 
 const isOpen = computed(() => Boolean(props.place))
+const canUploadToServer = computed(() => Boolean(props.serverRouteId && isServerPlaceId(props.place?.id)))
 
 watch(
   () => props.place?.id,
@@ -33,6 +45,14 @@ function updateNote() {
   if (!props.place) return
   emit('update-place', {
     ...props.place,
+    note: noteDraft.value,
+  })
+}
+
+function saveNote() {
+  if (!props.place || !canUploadToServer.value) return
+  emit('save-place-note', {
+    placeId: props.place.id,
     note: noteDraft.value,
   })
 }
@@ -69,13 +89,25 @@ function addFiles(files) {
       }
 
       if (file.size > MAX_IMAGE_SIZE) {
-        imageError.value = '单张图片不能超过 1MB。'
+        imageError.value = '单张图片不能超过 5MB。'
         return false
       }
 
       return true
     })
-    .forEach(readImageFile)
+    .forEach((file) => {
+      if (canUploadToServer.value) {
+        emit('upload-place-image', {
+          placeId: props.place.id,
+          file,
+          type: imageType.value,
+        })
+        return
+      }
+
+      imageError.value = '路线还未保存到服务器，已先保留本地预览。'
+      readImageFile(file)
+    })
 }
 
 function readImageFile(file) {
@@ -104,12 +136,30 @@ function readImageFile(file) {
   reader.readAsDataURL(file)
 }
 
-function removeImage(imageId) {
+function removeImage(image) {
   if (!props.place) return
-  emit('update-place', {
-    ...props.place,
-    images: (props.place.images || []).filter((image) => image.id !== imageId),
+  emit('delete-place-image', {
+    placeId: props.place.id,
+    image,
   })
+}
+
+function imageSrc(image) {
+  return image.imageUrl || image.dataUrl
+}
+
+function imageName(image) {
+  return image.name || image.originalName || 'route-image'
+}
+
+function imageTypeText(type) {
+  if (type === 'scenery') return '景点图'
+  if (type === 'pose') return '打卡姿势图'
+  return '其他'
+}
+
+function isServerPlaceId(value) {
+  return /^c[a-z0-9]{20,}$/i.test(String(value || ''))
 }
 
 function formatSize(size) {
@@ -125,7 +175,7 @@ function formatSize(size) {
         <span class="eyebrow">地点详情</span>
         <h2>{{ place.order }}. {{ place.name }}</h2>
       </div>
-      <button class="icon-button" type="button" aria-label="关闭详情" @click="$emit('close')">×</button>
+      <button class="icon-button" type="button" aria-label="关闭详情" @click="$emit('close')">x</button>
     </header>
 
     <dl class="detail-meta">
@@ -142,7 +192,13 @@ function formatSize(size) {
 
     <label class="field">
       <span>备注</span>
-      <textarea v-model="noteDraft" rows="4" placeholder="写下打卡姿势、机位、注意事项..." @input="updateNote" />
+      <textarea
+        v-model="noteDraft"
+        rows="4"
+        placeholder="写下打卡姿势、机位、注意事项..."
+        @blur="saveNote"
+        @input="updateNote"
+      />
     </label>
 
     <div class="image-toolbar">
@@ -154,23 +210,25 @@ function formatSize(size) {
           <option value="other">其他</option>
         </select>
       </label>
-      <button class="secondary-button" type="button" @click="triggerFilePicker">上传图片</button>
+      <button class="secondary-button" type="button" @click="triggerFilePicker">
+        {{ canUploadToServer ? '上传图片' : '本地预览' }}
+      </button>
       <input ref="fileInput" class="sr-only" type="file" accept="image/*" multiple @change="onFileChange" />
     </div>
 
     <div class="paste-zone" tabindex="0">
-      点击这里后粘贴截图或图片，单张不超过 1MB。
+      点击这里后粘贴截图或图片，单张不超过 5MB。
     </div>
     <p v-if="imageError" class="error-text">{{ imageError }}</p>
 
     <div v-if="place.images?.length" class="image-grid">
       <figure v-for="image in place.images" :key="image.id" class="image-card">
-        <img :src="image.dataUrl" :alt="image.name" />
+        <img :src="imageSrc(image)" :alt="imageName(image)" />
         <figcaption>
-          <span>{{ image.type === 'scenery' ? '景点图' : image.type === 'pose' ? '打卡姿势图' : '其他' }}</span>
+          <span>{{ imageTypeText(image.type || image.imageType) }}</span>
           <small>{{ formatSize(image.size) }}</small>
         </figcaption>
-        <button type="button" @click="removeImage(image.id)">删除</button>
+        <button type="button" @click="removeImage(image)">删除</button>
       </figure>
     </div>
     <div v-else class="empty-state">还没有图片。</div>
