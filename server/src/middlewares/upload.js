@@ -2,7 +2,7 @@ import crypto from 'node:crypto'
 import fs from 'node:fs'
 import path from 'node:path'
 import multer from 'multer'
-import { getUploadRoot } from '../services/fileStorage.js'
+import { isValidPlaceId, resolvePlaceUploadDir } from '../services/fileStorage.js'
 
 const ALLOWED_IMAGE_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif'])
 const EXT_BY_MIME = {
@@ -14,8 +14,7 @@ const EXT_BY_MIME = {
 
 const storage = multer.diskStorage({
   destination(req, file, callback) {
-    const placeId = req.params.id
-    const targetDir = path.join(getUploadRoot(), placeId)
+    const targetDir = resolvePlaceUploadDir(req.params.id)
     fs.mkdirSync(targetDir, { recursive: true })
     callback(null, targetDir)
   },
@@ -24,6 +23,19 @@ const storage = multer.diskStorage({
     callback(null, `${Date.now()}-${crypto.randomUUID()}${extension}`)
   },
 })
+
+export function validateUploadPlaceId(req, res, next) {
+  if (!isValidPlaceId(req.params.id)) {
+    res.status(400).json({
+      code: 400,
+      message: '地点 ID 无效',
+      data: null,
+    })
+    return
+  }
+
+  next()
+}
 
 export const uploadPlaceImage = multer({
   storage,

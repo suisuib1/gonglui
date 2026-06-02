@@ -1,5 +1,6 @@
 import path from 'node:path'
 import { prisma } from '../lib/prisma.js'
+import { removeStoredFile } from '../services/fileStorage.js'
 import { serializeImage } from '../services/routePayload.js'
 
 const VALID_IMAGE_TYPES = new Set(['scenery', 'pose', 'other'])
@@ -48,6 +49,7 @@ export async function uploadPlaceImage(req, res) {
     res.json(ok(serializeImage(image)))
   } catch (error) {
     if (error.code === 'P2003') {
+      await removeStoredFile(storageKey)
       res.status(404).json(fail(404, '地点不存在'))
       return
     }
