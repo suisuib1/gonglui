@@ -22,6 +22,7 @@ const loading = ref(false)
 const error = ref('')
 const activePlaceId = ref('')
 const previewImage = ref(null)
+const failedImageIds = ref(new Set())
 
 const activePlace = computed(() => route.value?.places?.find((place) => place.id === activePlaceId.value) || null)
 const plannedSegments = computed(() => (Array.isArray(route.value?.plannedSegments) ? route.value.plannedSegments : []))
@@ -58,7 +59,30 @@ function selectPlace(place) {
 }
 
 function groupedImages(place, type) {
-  return (place.images || []).filter((image) => (image.imageType || image.type || 'other') === type && image.imageUrl)
+  return (place.images || []).filter((image) => normalizeImageType(image) === type && image.imageUrl)
+}
+
+function placeImageCount(place) {
+  return Array.isArray(place.images) ? place.images.length : 0
+}
+
+function normalizeImageType(image) {
+  const type = image.imageType || image.type || 'other'
+  return IMAGE_TYPES.some((item) => item.value === type) ? type : 'other'
+}
+
+function imageKey(image) {
+  return image.id || image.imageUrl
+}
+
+function markImageFailed(image) {
+  const next = new Set(failedImageIds.value)
+  next.add(imageKey(image))
+  failedImageIds.value = next
+}
+
+function isImageFailed(image) {
+  return failedImageIds.value.has(imageKey(image))
 }
 
 function travelModeText(mode) {
@@ -141,6 +165,7 @@ function imageName(image) {
               <h2>{{ place.name || place.inputName }}</h2>
               <p>{{ place.address || '暂无地址' }}</p>
             </div>
+            <span class="place-image-count">图片 {{ placeImageCount(place) }} 张</span>
           </header>
 
           <section class="album-note">
@@ -150,16 +175,22 @@ function imageName(image) {
 
           <section class="album-groups">
             <div v-for="type in IMAGE_TYPES" :key="type.value" class="album-image-group">
-              <div class="album-group-title">{{ type.label }}</div>
+              <div class="album-group-title">
+                <span>{{ type.label }}</span>
+                <span>{{ groupedImages(place, type.value).length }}</span>
+              </div>
               <div v-if="groupedImages(place, type.value).length" class="album-image-grid">
                 <button
                   v-for="image in groupedImages(place, type.value)"
                   :key="image.id"
                   class="album-thumb"
+                  :class="{ 'is-broken': isImageFailed(image) }"
                   type="button"
                   @click="previewImage = image"
                 >
-                  <img :src="image.imageUrl" :alt="imageName(image)" />
+                  <img v-if="!isImageFailed(image)" :src="image.imageUrl" :alt="imageName(image)" @error="markImageFailed(image)" />
+                  <span v-else class="album-image-error">图片加载失败</span>
+                  <span class="album-preview-hint">点击预览</span>
                 </button>
               </div>
               <div v-else class="album-empty">暂无图片</div>

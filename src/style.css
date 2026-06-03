@@ -850,6 +850,21 @@ select:focus {
   gap: 10px;
 }
 
+.album-place-header > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.place-image-count {
+  border-radius: 999px;
+  padding: 5px 9px;
+  color: #0f766e;
+  background: #ccfbf1;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
 .album-place-card h3 {
   font-size: 17px;
 }
@@ -864,6 +879,22 @@ select:focus {
   color: #364255;
   font-size: 13px;
   font-weight: 800;
+}
+
+.album-group-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.album-group-title span:last-child {
+  min-width: 24px;
+  border-radius: 999px;
+  padding: 3px 8px;
+  color: #334155;
+  background: #e2e8f0;
+  text-align: center;
 }
 
 .album-note p {
@@ -887,19 +918,73 @@ select:focus {
 }
 
 .album-thumb {
+  position: relative;
+  display: grid;
+  min-height: 96px;
   width: 100%;
-  border: 0;
+  aspect-ratio: 1;
+  border: 1px solid #cbd5e1;
   border-radius: 8px;
   padding: 0;
   overflow: hidden;
-  background: #e2e8f0;
+  cursor: zoom-in;
+  background-color: #f8fafc;
+  background-image:
+    linear-gradient(45deg, #e2e8f0 25%, transparent 25%),
+    linear-gradient(-45deg, #e2e8f0 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #e2e8f0 75%),
+    linear-gradient(-45deg, transparent 75%, #e2e8f0 75%);
+  background-position:
+    0 0,
+    0 8px,
+    8px -8px,
+    -8px 0;
+  background-size: 16px 16px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.78);
 }
 
 .album-thumb img {
   display: block;
   width: 100%;
-  aspect-ratio: 1;
-  object-fit: cover;
+  height: 100%;
+  object-fit: contain;
+}
+
+.album-thumb.is-broken {
+  cursor: default;
+  background: #f1f5f9;
+}
+
+.album-preview-hint {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  padding: 5px 6px;
+  color: #fff;
+  background: rgba(15, 23, 42, 0.72);
+  font-size: 12px;
+  font-weight: 700;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.album-thumb:hover .album-preview-hint,
+.album-thumb:focus-visible .album-preview-hint {
+  opacity: 1;
+}
+
+.album-image-error {
+  display: grid;
+  width: 100%;
+  height: 100%;
+  place-items: center;
+  padding: 10px;
+  color: #991b1b;
+  background: #fee2e2;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .album-empty {
