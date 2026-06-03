@@ -122,6 +122,28 @@ test('does not delete images attached to another route', async () => {
   assert.equal(removed.includes('place-2/other-route.webp'), false)
 })
 
+test('deletes route with saved planned segments without touching route snapshot data', async () => {
+  const calls = []
+
+  const result = await deleteRouteAndUploads('route-1', {
+    db: mockDb(
+      {
+        id: 'route-1',
+        plannedSegments: [{ path: [[120, 30]] }],
+        places: [],
+      },
+      calls,
+    ),
+    removeFile: async () => {
+      throw new Error('should not remove files when there are no images')
+    },
+  })
+
+  assert.deepEqual(result, { id: 'route-1' })
+  assert.equal(calls[0].method, 'findUnique')
+  assert.equal(calls[1].method, 'delete')
+})
+
 function mockDb(routeValue, calls = []) {
   return {
     route: {

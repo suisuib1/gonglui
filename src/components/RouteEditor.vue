@@ -26,6 +26,10 @@ const smartSortEnabled = ref(false)
 const sortResult = ref(null)
 const places = ref([])
 const plannedSegments = ref([])
+const plannedSummary = ref(null)
+const plannedTravelMode = ref('')
+const plannedAt = ref('')
+const planStale = ref(false)
 const activePlaceId = ref('')
 const resolving = ref(false)
 const notice = ref('')
@@ -36,6 +40,7 @@ const loadingRoutes = ref(false)
 const savingServer = ref(false)
 
 const activePlace = computed(() => places.value.find((place) => place.id === activePlaceId.value) || null)
+const hasCurrentPlan = computed(() => plannedSegments.value.length > 0 && !planStale.value)
 
 onMounted(() => {
   const draft = loadDraft()
@@ -49,6 +54,10 @@ onMounted(() => {
   sortResult.value = draft.sortResult || null
   places.value = Array.isArray(draft.places) ? draft.places : []
   plannedSegments.value = Array.isArray(draft.plannedSegments) ? draft.plannedSegments : []
+  plannedSummary.value = draft.plannedSummary || null
+  plannedTravelMode.value = draft.plannedTravelMode || ''
+  plannedAt.value = draft.plannedAt || ''
+  planStale.value = Boolean(draft.planStale)
   serverRouteId.value = draft.serverRouteId || ''
   notice.value = draft.updatedAt ? `已读取草稿，最后保存于 ${formatDate(draft.updatedAt)}` : '已读取草稿。'
 })
@@ -56,7 +65,7 @@ onMounted(() => {
 async function generateRoute() {
   notice.value = ''
   error.value = ''
-  plannedSegments.value = []
+  resetPlanSnapshot()
   sortResult.value = null
 
   const names = parsePlaceNames(rawPlacesText.value)
@@ -145,7 +154,7 @@ async function generateRoute() {
     const plan = await planCurrentRoute(nextPlaces)
     notice.value = buildPlanNotice(baseNotice, plan)
   } catch (err) {
-    plannedSegments.value = []
+    resetPlanSnapshot()
     notice.value = `${baseNotice} 路线规划失败，已使用简单连线兜底。`
     error.value = error.value || err.message || '路线规划失败。'
   } finally {
@@ -193,7 +202,7 @@ async function planCurrentRoute(sourcePlaces) {
     }))
 
   if (routePoints.length < 2) {
-    plannedSegments.value = []
+    resetPlanSnapshot()
     return null
   }
 
@@ -201,8 +210,29 @@ async function planCurrentRoute(sourcePlaces) {
     travelMode: travelMode.value,
     points: routePoints,
   })
-  plannedSegments.value = Array.isArray(plan.segments) ? plan.segments : []
+  setPlanSnapshot(plan)
   return plan
+}
+
+function setPlanSnapshot(plan) {
+  plannedSegments.value = Array.isArray(plan?.segments) ? plan.segments : []
+  plannedSummary.value = plan?.summary || null
+  plannedTravelMode.value = plan?.travelMode || travelMode.value
+  plannedAt.value = new Date().toISOString()
+  planStale.value = false
+}
+
+function resetPlanSnapshot() {
+  plannedSegments.value = []
+  plannedSummary.value = null
+  plannedTravelMode.value = ''
+  plannedAt.value = ''
+  planStale.value = false
+}
+
+function markPlanStale() {
+  if (!plannedSegments.value.length) return
+  planStale.value = true
 }
 
 function buildPlanNotice(baseNotice, plan) {
@@ -254,12 +284,15 @@ async function saveCurrentRouteToServer() {
 
   try {
     const payload = buildRoutePayload()
+    const clearedStalePlan = planStale.value && plannedSegments.value.length > 0
     const localPlaces = places.value
     const route = serverRouteId.value ? await updateRoute(serverRouteId.value, payload) : await createRoute(payload)
     applyServerRoute(route, { preserveLocalImagesFrom: localPlaces })
     saveCurrentDraft()
-    notice.value = '路线已保存到服务器。'
     await loadSavedRoutes()
+    notice.value = clearedStalePlan
+      ? '路线和地点已保存，地点或模式已变更，请重新生成路线后再保存最新路线。'
+      : '路线已保存到服务器。'
   } catch (err) {
     error.value = err.message || '路线保存到服务器失败。'
   } finally {
@@ -289,7 +322,8 @@ async function loadRouteFromServer(routeId) {
     const route = await getRoute(routeId)
     applyServerRoute(route)
     saveCurrentDraft()
-    notice.value = '已加载服务器路线。重新点击“生成路线”可刷新真实路线。'
+    const loadedSavedPlan = plannedSegments.value.length > 0
+    notice.value = loadedSavedPlan ? '已加载上次保存的路线规划' : '已加载服务器路线。重新点击“生成路线”可刷新真实路线。'
   } catch (err) {
     error.value = err.message || '加载路线详情失败。'
   }
@@ -354,7 +388,15 @@ function applyServerRoute(route, options = {}) {
   city.value = route.city || city.value
   travelMode.value = route.travelMode || 'polyline'
   places.value = mergeLocalImages(Array.isArray(route.places) ? route.places : [], options.preserveLocalImagesFrom)
-  plannedSegments.value = []
+  if (Array.isArray(route.plannedSegments) && route.plannedSegments.length) {
+    plannedSegments.value = route.plannedSegments
+    plannedSummary.value = route.plannedSummary || null
+    plannedTravelMode.value = route.plannedTravelMode || route.travelMode || ''
+    plannedAt.value = route.plannedAt || ''
+    planStale.value = false
+  } else {
+    resetPlanSnapshot()
+  }
   sortResult.value = null
   rawPlacesText.value = places.value.map((place) => place.inputName || place.name).join('\n')
   activePlaceId.value = ''
@@ -376,7 +418,7 @@ function mergeLocalImages(serverPlaces, localPlaces) {
 }
 
 function buildRoutePayload() {
-  return {
+  const payload = {
     title: routeTitle.value,
     city: city.value,
     travelMode: travelMode.value,
@@ -392,6 +434,20 @@ function buildRoutePayload() {
       amapPoiId: place.amapPoiId || null,
     })),
   }
+
+  if (hasCurrentPlan.value) {
+    payload.plannedTravelMode = plannedTravelMode.value || travelMode.value
+    payload.plannedSegments = plannedSegments.value
+    payload.plannedSummary = plannedSummary.value || null
+    payload.plannedAt = plannedAt.value || new Date().toISOString()
+  } else if (planStale.value && plannedSegments.value.length) {
+    payload.plannedTravelMode = null
+    payload.plannedSegments = null
+    payload.plannedSummary = null
+    payload.plannedAt = null
+  }
+
+  return payload
 }
 
 function saveCurrentDraft() {
@@ -404,6 +460,10 @@ function saveCurrentDraft() {
     sortResult: sortResult.value,
     places: places.value,
     plannedSegments: plannedSegments.value,
+    plannedSummary: plannedSummary.value,
+    plannedTravelMode: plannedTravelMode.value,
+    plannedAt: plannedAt.value,
+    planStale: planStale.value,
     serverRouteId: serverRouteId.value,
   })
 
@@ -426,7 +486,7 @@ function clearCurrentDraft() {
   smartSortEnabled.value = false
   sortResult.value = null
   places.value = []
-  plannedSegments.value = []
+  resetPlanSnapshot()
   serverRouteId.value = ''
   activePlaceId.value = ''
   notice.value = '草稿已清空。'
@@ -478,7 +538,7 @@ function formatDate(value) {
 
       <label class="field">
         <span>路线模式</span>
-        <select v-model="travelMode">
+        <select v-model="travelMode" @change="markPlanStale">
           <option value="polyline">简单连线</option>
           <option value="driving">驾车路线</option>
           <option value="walking">步行路线</option>
@@ -496,6 +556,7 @@ function formatDate(value) {
           v-model="rawPlacesText"
           rows="7"
           placeholder="一行一个地点，也支持逗号、顿号、分号分隔"
+          @input="markPlanStale"
         />
       </label>
 
@@ -517,6 +578,9 @@ function formatDate(value) {
         <div class="route-mode-pill">{{ travelModeText(travelMode) }}</div>
         <small v-if="plannedSegments.length">
           {{ plannedSegments.length }} 个路段，{{ plannedSegments.filter((segment) => segment.fallback).length }} 个直线回退
+        </small>
+        <small v-if="planStale">
+          地点或模式已变更，请重新生成路线后再保存最新路线。
         </small>
         <small v-if="sortResult">
           原顺序：{{ formatOrder(sortResult.originalOrder) }}
@@ -543,6 +607,7 @@ function formatDate(value) {
           >
             <strong>{{ route.title }}</strong>
             <small>{{ route.city }} · {{ route.placeCount }} 个地点 · {{ route.imageCount }} 张图</small>
+            <small v-if="route.hasPlannedRoute">已保存路线规划</small>
           </button>
         </div>
       </section>
@@ -557,7 +622,7 @@ function formatDate(value) {
       <MapView
         :places="places"
         :active-place-id="activePlaceId"
-        :planned-segments="plannedSegments"
+        :planned-segments="hasCurrentPlan ? plannedSegments : []"
         @select-place="selectPlace"
       />
       <PlaceDetailPanel

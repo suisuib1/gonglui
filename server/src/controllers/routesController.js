@@ -1,5 +1,5 @@
 import { prisma } from '../lib/prisma.js'
-import { normalizeRoutePayload, serializeRoute } from '../services/routePayload.js'
+import { normalizeRoutePayload, serializeRoute, serializeRouteListItem } from '../services/routePayload.js'
 
 const routeInclude = {
   places: {
@@ -44,16 +44,7 @@ export async function listRoutes(req, res) {
 
   res.json(
     ok(
-      routes.map((route) => ({
-        id: route.id,
-        title: route.title,
-        city: route.city,
-        travelMode: route.travelMode,
-        placeCount: route.places.length,
-        imageCount: route.places.reduce((sum, place) => sum + place._count.images, 0),
-        updatedAt: route.updatedAt.toISOString(),
-        createdAt: route.createdAt.toISOString(),
-      })),
+      routes.map(serializeRouteListItem),
     ),
   )
 }
@@ -73,7 +64,7 @@ export async function getRoute(req, res) {
 }
 
 export async function updateRoute(req, res) {
-  const normalized = normalizeRoutePayload(req.body)
+  const normalized = normalizeRoutePayload(req.body, { partialPlan: true })
 
   const route = await prisma.$transaction(async (tx) => {
     const existing = await tx.route.findUnique({

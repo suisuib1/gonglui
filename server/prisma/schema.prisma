@@ -8,13 +8,17 @@ datasource db {
 }
 
 model Route {
-  id         String       @id @default(cuid())
-  title      String
-  city       String
-  travelMode String       @default("polyline")
-  createdAt  DateTime     @default(now())
-  updatedAt  DateTime     @updatedAt
-  places     RoutePlace[]
+  id                String       @id @default(cuid())
+  title             String
+  city              String
+  travelMode        String       @default("polyline")
+  plannedTravelMode String?
+  plannedSegments   Json?
+  plannedSummary    Json?
+  plannedAt         DateTime?
+  createdAt         DateTime     @default(now())
+  updatedAt         DateTime     @updatedAt
+  places            RoutePlace[]
 }
 
 model RoutePlace {
