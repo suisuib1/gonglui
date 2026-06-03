@@ -38,7 +38,8 @@ const activePlaceId = ref('')
 const resolving = ref(false)
 const notice = ref('')
 const error = ref('')
-const serverRouteId = ref('')
+const currentRouteId = ref('')
+const isEditingExistingRoute = ref(false)
 const savedRoutes = ref([])
 const loadingRoutes = ref(false)
 const savingServer = ref(false)
@@ -54,6 +55,7 @@ const shareMessage = ref('')
 
 const activePlace = computed(() => places.value.find((place) => place.id === activePlaceId.value) || null)
 const hasCurrentPlan = computed(() => plannedSegments.value.length > 0 && !planStale.value)
+const editingRouteLabel = computed(() => (isEditingExistingRoute.value && currentRouteId.value ? routeTitle.value : ''))
 
 onMounted(() => {
   const draft = loadDraft()
@@ -71,7 +73,8 @@ onMounted(() => {
   plannedTravelMode.value = draft.plannedTravelMode || ''
   plannedAt.value = draft.plannedAt || ''
   planStale.value = Boolean(draft.planStale)
-  serverRouteId.value = draft.serverRouteId || ''
+  currentRouteId.value = draft.isEditingExistingRoute ? draft.currentRouteId || draft.serverRouteId || '' : ''
+  isEditingExistingRoute.value = Boolean(currentRouteId.value && draft.isEditingExistingRoute)
   notice.value = draft.updatedAt ? `已读取草稿，最后保存于 ${formatDate(draft.updatedAt)}` : '已读取草稿。'
 })
 
@@ -321,7 +324,27 @@ function appendPlaceImage({ placeId, image }) {
   )
 }
 
-async function saveCurrentRouteToServer() {
+async function saveRouteAsNew() {
+  await saveRouteToServer({
+    mode: 'create',
+    successMessage: '已保存为新路线。',
+  })
+}
+
+async function updateCurrentRouteOnServer() {
+  if (!currentRouteId.value || !isEditingExistingRoute.value) {
+    error.value = '请先从旅游路线列表加载一条路线，再更新当前路线。'
+    notice.value = ''
+    return
+  }
+
+  await saveRouteToServer({
+    mode: 'update',
+    successMessage: '已更新当前路线。',
+  })
+}
+
+async function saveRouteToServer({ mode, successMessage }) {
   if (!routeTitle.value.trim()) {
     error.value = '请先填写路线名称。'
     notice.value = ''
@@ -342,13 +365,16 @@ async function saveCurrentRouteToServer() {
     const payload = buildRoutePayload()
     const clearedStalePlan = planStale.value && plannedSegments.value.length > 0
     const localPlaces = places.value
-    const route = serverRouteId.value ? await updateRoute(serverRouteId.value, payload) : await createRoute(payload)
-    applyServerRoute(route, { preserveLocalImagesFrom: localPlaces })
+    const route = mode === 'update' ? await updateRoute(currentRouteId.value, payload) : await createRoute(payload)
+    applyServerRoute(route, { editingExisting: true, preserveLocalImagesFrom: localPlaces })
     saveCurrentDraft()
     await loadSavedRoutes({ silent: true })
     notice.value = clearedStalePlan
       ? '路线和地点已保存，地点或模式已变更，请重新生成路线后再保存最新路线。'
       : '路线已保存到服务器。'
+    if (!clearedStalePlan) {
+      notice.value = successMessage
+    }
   } catch (err) {
     error.value = err.message || '路线保存到服务器失败。'
   } finally {
@@ -378,7 +404,7 @@ async function loadRouteFromServer(routeId) {
 
   try {
     const route = await getRoute(routeId)
-    applyServerRoute(route)
+    applyServerRoute(route, { editingExisting: true })
     saveCurrentDraft()
     const loadedSavedPlan = plannedSegments.value.length > 0
     notice.value = loadedSavedPlan ? '已加载上次保存的路线规划' : '已加载服务器路线。重新点击“生成路线”可刷新真实路线。'
@@ -420,7 +446,7 @@ async function removeSavedRoute(route) {
     if (libraryDetailRoute.value?.id === route.id) {
       libraryDetailRoute.value = null
     }
-    if (serverRouteId.value === route.id) {
+    if (currentRouteId.value === route.id) {
       clearCurrentDraft()
     }
     if (shareRouteId.value === route.id) {
@@ -469,7 +495,7 @@ async function uploadImageToServer({ placeId, file, type }) {
   error.value = ''
   notice.value = ''
 
-  if (!serverRouteId.value || !isServerPlaceId(placeId)) {
+  if (!currentRouteId.value || !isServerPlaceId(placeId)) {
     error.value = '请先保存路线到服务器，再上传图片。'
     return
   }
@@ -509,7 +535,7 @@ async function removePlaceImage({ placeId, image }) {
 }
 
 async function savePlaceNoteToServer({ placeId, note }) {
-  if (!serverRouteId.value || !isServerPlaceId(placeId)) return
+  if (!currentRouteId.value || !isServerPlaceId(placeId)) return
 
   try {
     await updatePlaceNote(placeId, note)
@@ -519,7 +545,8 @@ async function savePlaceNoteToServer({ placeId, note }) {
 }
 
 function applyServerRoute(route, options = {}) {
-  serverRouteId.value = route.id
+  currentRouteId.value = route.id
+  isEditingExistingRoute.value = Boolean(options.editingExisting)
   routeTitle.value = route.title || routeTitle.value
   city.value = route.city || city.value
   travelMode.value = route.travelMode || 'polyline'
@@ -600,7 +627,8 @@ function saveCurrentDraft() {
     plannedTravelMode: plannedTravelMode.value,
     plannedAt: plannedAt.value,
     planStale: planStale.value,
-    serverRouteId: serverRouteId.value,
+    currentRouteId: currentRouteId.value,
+    isEditingExistingRoute: isEditingExistingRoute.value,
   })
 
   if (result.ok) {
@@ -623,7 +651,8 @@ function clearCurrentDraft() {
   sortResult.value = null
   places.value = []
   resetPlanSnapshot()
-  serverRouteId.value = ''
+  currentRouteId.value = ''
+  isEditingExistingRoute.value = false
   activePlaceId.value = ''
   notice.value = '草稿已清空。'
   error.value = ''
@@ -714,14 +743,24 @@ function buildFrontendShareLink(share) {
         <button class="secondary-button" type="button" @click="saveCurrentDraft">保存草稿</button>
       </div>
       <div class="button-row">
-        <button class="secondary-button" type="button" :disabled="savingServer" @click="saveCurrentRouteToServer">
-          {{ savingServer ? '保存中...' : '保存到服务器' }}
+        <button class="secondary-button" type="button" :disabled="savingServer" @click="saveRouteAsNew">
+          {{ savingServer ? '保存中...' : '保存为新路线' }}
+        </button>
+        <button
+          v-if="isEditingExistingRoute"
+          class="secondary-button"
+          type="button"
+          :disabled="savingServer"
+          @click="updateCurrentRouteOnServer"
+        >
+          {{ savingServer ? '更新中...' : '更新当前路线' }}
         </button>
         <button class="ghost-button" type="button" @click="clearCurrentDraft">清空草稿</button>
       </div>
 
       <section class="route-plan-status">
         <span class="section-title">路线状态</span>
+        <small v-if="editingRouteLabel">正在编辑：{{ editingRouteLabel }}</small>
         <div class="route-mode-pill">{{ travelModeText(travelMode) }}</div>
         <small v-if="hasCurrentPlan">
           {{ plannedSegments.length }} 个路段，{{ plannedSegments.filter((segment) => segment.fallback).length }} 个直线回退
@@ -777,7 +816,7 @@ function buildFrontendShareLink(share) {
       />
       <PlaceDetailPanel
         :place="activePlace"
-        :server-route-id="serverRouteId"
+        :server-route-id="currentRouteId"
         @append-place-image="appendPlaceImage"
         @close="activePlaceId = ''"
         @delete-place-image="removePlaceImage"
