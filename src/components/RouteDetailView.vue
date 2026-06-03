@@ -18,7 +18,7 @@ const props = defineProps({
   },
 })
 
-defineEmits(['close', 'preview-image', 'view-route'])
+defineEmits(['close', 'preview-image', 'share-route', 'view-route'])
 
 const imageCount = computed(() =>
   (props.route?.places || []).reduce((sum, place) => sum + (Array.isArray(place.images) ? place.images.length : 0), 0),
@@ -63,6 +63,7 @@ function imageName(image) {
           <h2>{{ route.title }}</h2>
         </div>
         <div class="detail-actions">
+          <button class="secondary-button" type="button" @click="$emit('share-route', route.id)">分享</button>
           <button class="secondary-button" type="button" @click="$emit('view-route', route.id)">查看路线</button>
           <button class="ghost-button" type="button" @click="$emit('close')">关闭详情</button>
         </div>

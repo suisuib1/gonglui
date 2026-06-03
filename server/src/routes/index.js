@@ -5,6 +5,7 @@ import { deleteRoute } from '../controllers/routeDeleteController.js'
 import { optimizeRouteController } from '../controllers/routeOptimizeController.js'
 import { planRouteController } from '../controllers/routePlanController.js'
 import { createRoute, getRoute, listRoutes, updateRoute } from '../controllers/routesController.js'
+import { createRouteShare, getSharedRoute } from '../controllers/shareController.js'
 import { uploadPlaceImage, validateUploadPlaceId } from '../middlewares/upload.js'
 
 export const apiRouter = Router()
@@ -24,9 +25,11 @@ apiRouter.post('/routes', createRoute)
 apiRouter.post('/routes/optimize', optimizeRouteController)
 apiRouter.post('/routes/plan', planRouteController)
 apiRouter.get('/routes', listRoutes)
+apiRouter.post('/routes/:id/share', createRouteShare)
 apiRouter.get('/routes/:id', getRoute)
 apiRouter.put('/routes/:id', updateRoute)
 apiRouter.delete('/routes/:id', deleteRoute)
+apiRouter.get('/share/:token', getSharedRoute)
 apiRouter.patch('/places/:id/note', updatePlaceNote)
 apiRouter.post('/places/:id/images', validateUploadPlaceId, uploadPlaceImage.single('image'), uploadPlaceImageController)
 apiRouter.delete('/images/:id', deleteImage)

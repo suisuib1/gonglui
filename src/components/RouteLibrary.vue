@@ -22,9 +22,21 @@ defineProps({
     type: String,
     default: '',
   },
+  shareLink: {
+    type: String,
+    default: '',
+  },
+  shareMessage: {
+    type: String,
+    default: '',
+  },
+  sharingRouteId: {
+    type: String,
+    default: '',
+  },
 })
 
-defineEmits(['close-detail', 'delete-route', 'preview-image', 'refresh', 'view-detail', 'view-route'])
+defineEmits(['close-detail', 'copy-share-link', 'delete-route', 'preview-image', 'refresh', 'share-route', 'view-detail', 'view-route'])
 
 function travelModeText(mode) {
   if (mode === 'driving') return '驾车'
@@ -56,6 +68,17 @@ function formatDate(value) {
           {{ loading ? '刷新中...' : '刷新列表' }}
         </button>
       </header>
+
+      <section v-if="shareLink" class="share-link-panel">
+        <div>
+          <strong>分享链接</strong>
+          <p>{{ shareMessage || '已生成只读分享链接。' }}</p>
+        </div>
+        <div class="share-link-row">
+          <input :value="shareLink" readonly type="text" @focus="$event.target.select()" />
+          <button class="secondary-button" type="button" @click="$emit('copy-share-link')">复制</button>
+        </div>
+      </section>
 
       <div v-if="loading" class="empty-state">路线列表加载中...</div>
       <div v-else-if="!routes.length" class="empty-state">还没有保存的路线。</div>
@@ -97,6 +120,9 @@ function formatDate(value) {
           <div class="library-card-actions">
             <button class="secondary-button" type="button" @click="$emit('view-detail', route.id)">查看详情</button>
             <button class="primary-button" type="button" @click="$emit('view-route', route.id)">查看路线</button>
+            <button class="secondary-button" type="button" :disabled="sharingRouteId === route.id" @click="$emit('share-route', route.id)">
+              {{ sharingRouteId === route.id ? '生成中...' : '分享' }}
+            </button>
             <button
               class="danger-button"
               type="button"
@@ -115,6 +141,7 @@ function formatDate(value) {
       :route="detailRoute"
       @close="$emit('close-detail')"
       @preview-image="$emit('preview-image', $event)"
+      @share-route="$emit('share-route', $event)"
       @view-route="$emit('view-route', $event)"
     />
   </main>

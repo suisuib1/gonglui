@@ -799,6 +799,37 @@ select:focus {
   gap: 8px;
 }
 
+.share-link-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 14px;
+  background: #eff6ff;
+}
+
+.share-link-panel p {
+  margin: 4px 0 0;
+  color: #475569;
+  font-size: 13px;
+}
+
+.share-link-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.share-link-row input {
+  min-width: 0;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 10px 11px;
+  color: #172033;
+  background: #fff;
+}
+
 .route-detail-view {
   background: #fff;
 }
@@ -878,6 +909,115 @@ select:focus {
   color: #64748b;
   background: #fff;
   font-size: 13px;
+}
+
+.share-page {
+  min-height: 100vh;
+  background: #eef2f7;
+}
+
+.share-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 24px;
+  background: #fff;
+  border-bottom: 1px solid #dbe3ef;
+}
+
+.share-header h1 {
+  margin: 4px 0 6px;
+  color: #111827;
+  font-size: 30px;
+}
+
+.share-header p {
+  margin: 0;
+  color: #64748b;
+}
+
+.share-meta {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(80px, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.share-meta div {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.share-meta dt {
+  color: #64748b;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.share-meta dd {
+  margin: 4px 0 0;
+  color: #172033;
+  font-weight: 800;
+}
+
+.share-map-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 16px;
+  height: 58vh;
+  min-height: 440px;
+  padding: 16px 24px;
+}
+
+.share-active-place {
+  overflow-y: auto;
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+}
+
+.share-active-place h2 {
+  margin: 10px 0 6px;
+  color: #111827;
+  font-size: 18px;
+}
+
+.share-active-place p {
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.share-place-list {
+  display: grid;
+  gap: 14px;
+  padding: 0 24px 28px;
+}
+
+.share-place-list .album-place-card h2 {
+  margin: 0;
+  color: #111827;
+  font-size: 18px;
+}
+
+.share-place-list .place-order {
+  border: 0;
+  cursor: pointer;
+}
+
+.share-state {
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 80px 24px;
+  color: #475569;
+  text-align: center;
+}
+
+.share-state h1 {
+  color: #111827;
 }
 
 .image-preview-backdrop {
@@ -982,5 +1122,27 @@ select:focus {
   .route-card-meta,
   .route-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .share-header {
+    display: grid;
+  }
+
+  .share-meta {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .share-map-grid {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 0;
+  }
+
+  .share-map-grid .map-shell {
+    min-height: 420px;
+  }
+
+  .share-link-row {
+    grid-template-columns: 1fr;
   }
 }

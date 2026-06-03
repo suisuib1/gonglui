@@ -55,6 +55,21 @@ export function serializeRoute(route) {
   }
 }
 
+export function serializeSharedRoute(route) {
+  const serialized = serializeRoute(route)
+
+  return {
+    ...serialized,
+    places: serialized.places.map((place) => ({
+      ...place,
+      images: place.images.map((image) => {
+        const { storageKey, ...publicImage } = image
+        return publicImage
+      }),
+    })),
+  }
+}
+
 export function serializeRouteListItem(route) {
   return {
     id: route.id,

@@ -217,6 +217,7 @@ test('serializes route list item without full planned segments', () => {
     travelMode: 'driving',
     plannedTravelMode: 'driving',
     plannedSegments: [{ path: [[120, 30]] }],
+    shareToken: 'share-token',
     plannedAt: new Date('2026-06-02T02:00:00.000Z'),
     createdAt: new Date('2026-06-01T00:00:00.000Z'),
     updatedAt: new Date('2026-06-02T00:00:00.000Z'),
@@ -227,4 +228,5 @@ test('serializes route list item without full planned segments', () => {
   assert.equal(item.plannedTravelMode, 'driving')
   assert.equal(item.plannedAt, '2026-06-02T02:00:00.000Z')
   assert.equal('plannedSegments' in item, false)
+  assert.equal('shareToken' in item, false)
 })

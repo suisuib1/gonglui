@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { getAmapConfig, searchPlaceByName } from '../services/amapLoader'
 import {
   createRoute,
+  createRouteShare,
   deleteRoute,
   deleteImage,
   getRoute,
@@ -46,6 +47,10 @@ const libraryDetailRoute = ref(null)
 const libraryDetailLoading = ref(false)
 const deletingRouteId = ref('')
 const previewImage = ref(null)
+const sharingRouteId = ref('')
+const shareRouteId = ref('')
+const shareLink = ref('')
+const shareMessage = ref('')
 
 const activePlace = computed(() => places.value.find((place) => place.id === activePlaceId.value) || null)
 const hasCurrentPlan = computed(() => plannedSegments.value.length > 0 && !planStale.value)
@@ -418,12 +423,45 @@ async function removeSavedRoute(route) {
     if (serverRouteId.value === route.id) {
       clearCurrentDraft()
     }
+    if (shareRouteId.value === route.id) {
+      shareRouteId.value = ''
+      shareLink.value = ''
+      shareMessage.value = ''
+    }
     await loadSavedRoutes({ silent: true })
     notice.value = `已删除路线：${route.title}`
   } catch (err) {
     error.value = err.message || '删除路线失败。'
   } finally {
     deletingRouteId.value = ''
+  }
+}
+
+async function shareSavedRoute(routeId) {
+  sharingRouteId.value = routeId
+  shareMessage.value = ''
+  error.value = ''
+
+  try {
+    const share = await createRouteShare(routeId)
+    shareRouteId.value = routeId
+    shareLink.value = buildFrontendShareLink(share)
+    shareMessage.value = '已生成只读分享链接。'
+  } catch (err) {
+    error.value = err.message || '生成分享链接失败。'
+  } finally {
+    sharingRouteId.value = ''
+  }
+}
+
+async function copyShareLink() {
+  if (!shareLink.value) return
+
+  try {
+    await navigator.clipboard.writeText(shareLink.value)
+    shareMessage.value = '分享链接已复制。'
+  } catch (err) {
+    shareMessage.value = '复制失败，请手动选择链接复制。'
   }
 }
 
@@ -614,6 +652,11 @@ function formatDate(value) {
     minute: '2-digit',
   }).format(new Date(value))
 }
+
+function buildFrontendShareLink(share) {
+  const token = share?.shareToken || String(share?.shareUrl || '').split('/').filter(Boolean).pop()
+  return `${window.location.origin}/#/share/${encodeURIComponent(token || '')}`
+}
 </script>
 
 <template>
@@ -752,10 +795,15 @@ function formatDate(value) {
       :detail-route="libraryDetailRoute"
       :loading="loadingRoutes"
       :routes="savedRoutes"
+      :share-link="shareLink"
+      :share-message="shareMessage"
+      :sharing-route-id="sharingRouteId"
       @close-detail="libraryDetailRoute = null"
+      @copy-share-link="copyShareLink"
       @delete-route="removeSavedRoute"
       @preview-image="previewImage = $event"
       @refresh="loadSavedRoutes"
+      @share-route="shareSavedRoute"
       @view-detail="openRouteDetail"
       @view-route="loadRouteFromServer"
     />

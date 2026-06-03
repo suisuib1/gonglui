@@ -32,6 +32,16 @@ export function deleteRoute(id) {
   })
 }
 
+export function createRouteShare(id) {
+  return apiRequest(`/api/routes/${id}/share`, {
+    method: 'POST',
+  })
+}
+
+export function getSharedRoute(token) {
+  return apiRequest(`/api/share/${encodeURIComponent(token)}`)
+}
+
 export function planRoute(payload) {
   return apiRequest('/api/routes/plan', {
     method: 'POST',
