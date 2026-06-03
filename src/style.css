@@ -348,6 +348,11 @@ select:focus {
   padding-bottom: 24px;
 }
 
+.place-list-item {
+  display: grid;
+  gap: 8px;
+}
+
 .place-card {
   display: grid;
   grid-template-columns: 30px minmax(0, 1fr) auto;
@@ -394,6 +399,84 @@ select:focus {
 
 .place-main small {
   color: #64748b;
+}
+
+.candidate-hint {
+  color: #b45309 !important;
+  font-weight: 800;
+}
+
+.candidate-toggle {
+  justify-self: start;
+}
+
+.candidate-panel {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  padding: 10px;
+  background: #fff;
+}
+
+.candidate-panel-title {
+  color: #364255;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.candidate-empty {
+  color: #64748b;
+  font-size: 13px;
+}
+
+.candidate-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px;
+  background: #f8fafc;
+}
+
+.candidate-card.selected {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.candidate-main {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.candidate-main strong,
+.candidate-main span,
+.candidate-main small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.candidate-main span,
+.candidate-main small {
+  color: #64748b;
+  font-size: 12px;
+}
+
+.candidate-actions {
+  display: grid;
+  align-content: center;
+  justify-items: end;
+  gap: 6px;
+}
+
+.selected-candidate {
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }
 
 .status-pill {

@@ -68,22 +68,22 @@ export async function searchPlaceByName(name, city) {
     const searcher = new AMap.PlaceSearch({
       city: city || '全国',
       citylimit: Boolean(city),
-      pageSize: 1,
+      pageSize: 10,
       pageIndex: 1,
     })
 
     searcher.search(name, (status, result) => {
-      const firstPoi = result?.poiList?.pois?.[0]
-      const location = firstPoi?.location
+      const candidates = normalizePoiCandidates(result?.poiList?.pois)
+      const firstPoi = candidates[0]
 
-      if (status === 'complete' && firstPoi && location) {
+      if (status === 'complete' && firstPoi) {
         resolve({
           inputName: name,
-          name: firstPoi.name || name,
-          address: firstPoi.address || firstPoi.district || '',
-          lng: Number(location.lng),
-          lat: Number(location.lat),
+          ...candidateToPlace(firstPoi, name),
           status: 'success',
+          candidates,
+          selectedCandidateIndex: 0,
+          candidateCount: candidates.length,
         })
         return
       }
@@ -95,7 +95,55 @@ export async function searchPlaceByName(name, city) {
         lng: null,
         lat: null,
         status: 'failed',
+        candidates: [],
+        selectedCandidateIndex: -1,
+        candidateCount: 0,
       })
     })
   })
+}
+
+function normalizePoiCandidates(pois) {
+  if (!Array.isArray(pois)) return []
+
+  return pois.map(normalizePoiCandidate).filter((candidate) => candidate && Number.isFinite(candidate.longitude) && Number.isFinite(candidate.latitude))
+}
+
+function normalizePoiCandidate(poi) {
+  const location = poi?.location
+  const longitude = Number(location?.lng ?? location?.longitude)
+  const latitude = Number(location?.lat ?? location?.latitude)
+
+  if (!Number.isFinite(longitude) || !Number.isFinite(latitude)) return null
+
+  const district = [poi.pname, poi.cityname, poi.adname]
+    .map(toText)
+    .filter(Boolean)
+    .filter((value, index, source) => source.indexOf(value) === index)
+    .join(' · ')
+
+  return {
+    name: toText(poi.name),
+    address: toText(poi.address) || district,
+    longitude,
+    latitude,
+    amapPoiId: toText(poi.id),
+    district,
+    type: toText(poi.type),
+  }
+}
+
+function candidateToPlace(candidate, fallbackName) {
+  return {
+    name: candidate.name || fallbackName,
+    address: candidate.address || candidate.district || '',
+    lng: candidate.longitude,
+    lat: candidate.latitude,
+    amapPoiId: candidate.amapPoiId || null,
+  }
+}
+
+function toText(value) {
+  if (Array.isArray(value)) return value.filter(Boolean).join(' ')
+  return String(value ?? '').trim()
 }

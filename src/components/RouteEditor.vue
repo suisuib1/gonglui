@@ -113,6 +113,10 @@ async function generateRoute() {
         lng: result.lng,
         lat: result.lat,
         status: result.status,
+        amapPoiId: result.amapPoiId || previous?.amapPoiId || null,
+        candidates: result.candidates || [],
+        selectedCandidateIndex: result.selectedCandidateIndex ?? 0,
+        candidateCount: result.candidateCount || 0,
         note: previous?.note || '',
         images: previous?.images || [],
       }
@@ -129,6 +133,9 @@ async function generateRoute() {
         lng: null,
         lat: null,
         status: 'failed',
+        candidates: [],
+        selectedCandidateIndex: -1,
+        candidateCount: 0,
         note: previous?.note || '',
         images: previous?.images || [],
       }
@@ -160,10 +167,10 @@ async function generateRoute() {
 
   try {
     const plan = await planCurrentRoute(nextPlaces)
-    notice.value = buildPlanNotice(baseNotice, plan)
+    notice.value = appendCandidateNotice(buildPlanNotice(baseNotice, plan), nextPlaces)
   } catch (err) {
     resetPlanSnapshot()
-    notice.value = `${baseNotice} 路线规划失败，已使用简单连线兜底。`
+    notice.value = appendCandidateNotice(`${baseNotice} 路线规划失败，已使用简单连线兜底。`, nextPlaces)
     error.value = error.value || err.message || '路线规划失败。'
   } finally {
     resolving.value = false
@@ -241,6 +248,36 @@ function resetPlanSnapshot() {
 function markPlanStale() {
   if (!plannedSegments.value.length) return
   planStale.value = true
+}
+
+function appendCandidateNotice(message, sourcePlaces) {
+  if (!sourcePlaces.some((place) => place.candidateCount > 1)) return message
+  return `${message} 部分地点存在多个候选，请确认是否选择正确。`
+}
+
+function usePlaceCandidate({ placeId, index }) {
+  const targetPlace = places.value.find((place) => place.id === placeId)
+  const candidate = targetPlace?.candidates?.[index]
+  if (!targetPlace || !candidate) return
+  if (targetPlace.selectedCandidateIndex === index) return
+
+  places.value = places.value.map((place) =>
+    place.id === placeId
+      ? {
+          ...place,
+          name: candidate.name || place.inputName,
+          address: candidate.address || candidate.district || '',
+          lng: candidate.longitude,
+          lat: candidate.latitude,
+          amapPoiId: candidate.amapPoiId || null,
+          status: 'success',
+          selectedCandidateIndex: index,
+          candidateCount: place.candidates?.length || 0,
+        }
+      : place,
+  )
+  markPlanStale()
+  notice.value = '地点已变更，请重新生成路线。'
 }
 
 function buildPlanNotice(baseNotice, plan) {
@@ -643,7 +680,7 @@ function formatDate(value) {
       <section class="route-plan-status">
         <span class="section-title">路线状态</span>
         <div class="route-mode-pill">{{ travelModeText(travelMode) }}</div>
-        <small v-if="plannedSegments.length">
+        <small v-if="hasCurrentPlan">
           {{ plannedSegments.length }} 个路段，{{ plannedSegments.filter((segment) => segment.fallback).length }} 个直线回退
         </small>
         <small v-if="planStale">
@@ -685,7 +722,7 @@ function formatDate(value) {
       <p v-if="notice" class="notice-text">{{ notice }}</p>
       <p v-if="error" class="error-text">{{ error }}</p>
 
-      <PlaceList :places="places" :active-place-id="activePlaceId" @select="selectPlace" />
+      <PlaceList :places="places" :active-place-id="activePlaceId" @select="selectPlace" @use-candidate="usePlaceCandidate" />
     </aside>
 
     <section class="workspace">
