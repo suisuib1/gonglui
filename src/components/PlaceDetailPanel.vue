@@ -30,6 +30,12 @@ const noteDraft = ref('')
 
 const isOpen = computed(() => Boolean(props.place))
 const canUploadToServer = computed(() => Boolean(props.serverRouteId && isServerPlaceId(props.place?.id)))
+const filteredImages = computed(() => {
+  const images = Array.isArray(props.place?.images) ? props.place.images : []
+  return images.filter((image) => normalizeImageType(image) === imageType.value)
+})
+const currentImageCountText = computed(() => `当前分类：${imageTypeText(imageType.value)}，${filteredImages.value.length} 张`)
+const emptyImageText = computed(() => `暂无${imageType.value === 'other' ? '其他图片' : imageTypeText(imageType.value)}`)
 
 watch(
   () => props.place?.id,
@@ -158,6 +164,16 @@ function imageTypeText(type) {
   return '其他'
 }
 
+function normalizeImageType(image = {}) {
+  const type = image.imageType || image.type
+
+  if (type === 'scenery' || type === 'pose') {
+    return type
+  }
+
+  return 'other'
+}
+
 function isServerPlaceId(value) {
   return /^c[a-z0-9]{20,}$/i.test(String(value || ''))
 }
@@ -219,18 +235,19 @@ function formatSize(size) {
     <div class="paste-zone" tabindex="0">
       点击这里后粘贴截图或图片，单张不超过 5MB。
     </div>
+    <p class="image-count-text">{{ currentImageCountText }}</p>
     <p v-if="imageError" class="error-text">{{ imageError }}</p>
 
-    <div v-if="place.images?.length" class="image-grid">
-      <figure v-for="image in place.images" :key="image.id" class="image-card">
+    <div v-if="filteredImages.length" class="image-grid">
+      <figure v-for="image in filteredImages" :key="image.id" class="image-card">
         <img :src="imageSrc(image)" :alt="imageName(image)" />
         <figcaption>
-          <span>{{ imageTypeText(image.type || image.imageType) }}</span>
+          <span>{{ imageTypeText(normalizeImageType(image)) }}</span>
           <small>{{ formatSize(image.size) }}</small>
         </figcaption>
         <button type="button" @click="removeImage(image)">删除</button>
       </figure>
     </div>
-    <div v-else class="empty-state">还没有图片。</div>
+    <div v-else class="empty-state">{{ emptyImageText }}</div>
   </aside>
 </template>

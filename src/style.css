@@ -608,6 +608,12 @@ select:focus {
   box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12);
 }
 
+.image-count-text {
+  margin: -6px 0 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .image-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(116px, 1fr));
