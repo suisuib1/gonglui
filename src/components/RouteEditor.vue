@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import { getAmapConfig, searchPlaceByName } from '../services/amapLoader'
 import {
   createRoute,
+  deleteRoute,
   deleteImage,
   getRoute,
   listRoutes,
@@ -15,8 +16,10 @@ import {
 import { clearDraft, loadDraft, saveDraft } from '../utils/storage'
 import { createPendingPlaces, parsePlaceNames } from '../utils/placeParser'
 import MapView from './MapView.vue'
+import ImagePreviewModal from './ImagePreviewModal.vue'
 import PlaceDetailPanel from './PlaceDetailPanel.vue'
 import PlaceList from './PlaceList.vue'
+import RouteLibrary from './RouteLibrary.vue'
 
 const routeTitle = ref('杭州打卡路线')
 const city = ref('杭州')
@@ -38,6 +41,11 @@ const serverRouteId = ref('')
 const savedRoutes = ref([])
 const loadingRoutes = ref(false)
 const savingServer = ref(false)
+const viewMode = ref('editor')
+const libraryDetailRoute = ref(null)
+const libraryDetailLoading = ref(false)
+const deletingRouteId = ref('')
+const previewImage = ref(null)
 
 const activePlace = computed(() => places.value.find((place) => place.id === activePlaceId.value) || null)
 const hasCurrentPlan = computed(() => plannedSegments.value.length > 0 && !planStale.value)
@@ -272,6 +280,12 @@ function appendPlaceImage({ placeId, image }) {
 }
 
 async function saveCurrentRouteToServer() {
+  if (!routeTitle.value.trim()) {
+    error.value = '请先填写路线名称。'
+    notice.value = ''
+    return
+  }
+
   if (!places.value.length) {
     error.value = '请先生成路线，再保存到服务器。'
     notice.value = ''
@@ -289,7 +303,7 @@ async function saveCurrentRouteToServer() {
     const route = serverRouteId.value ? await updateRoute(serverRouteId.value, payload) : await createRoute(payload)
     applyServerRoute(route, { preserveLocalImagesFrom: localPlaces })
     saveCurrentDraft()
-    await loadSavedRoutes()
+    await loadSavedRoutes({ silent: true })
     notice.value = clearedStalePlan
       ? '路线和地点已保存，地点或模式已变更，请重新生成路线后再保存最新路线。'
       : '路线已保存到服务器。'
@@ -300,13 +314,15 @@ async function saveCurrentRouteToServer() {
   }
 }
 
-async function loadSavedRoutes() {
+async function loadSavedRoutes(options = {}) {
   loadingRoutes.value = true
   error.value = ''
 
   try {
     savedRoutes.value = await listRoutes()
-    notice.value = savedRoutes.value.length ? '已加载服务器路线列表。' : '服务器还没有保存的路线。'
+    if (!options.silent) {
+      notice.value = savedRoutes.value.length ? '已加载服务器路线列表。' : '服务器还没有保存的路线。'
+    }
   } catch (err) {
     error.value = err.message || '加载服务器路线列表失败。'
   } finally {
@@ -324,8 +340,53 @@ async function loadRouteFromServer(routeId) {
     saveCurrentDraft()
     const loadedSavedPlan = plannedSegments.value.length > 0
     notice.value = loadedSavedPlan ? '已加载上次保存的路线规划' : '已加载服务器路线。重新点击“生成路线”可刷新真实路线。'
+    viewMode.value = 'editor'
   } catch (err) {
     error.value = err.message || '加载路线详情失败。'
+  }
+}
+
+async function showRouteLibrary() {
+  viewMode.value = 'library'
+  await loadSavedRoutes({ silent: true })
+}
+
+function showEditor() {
+  viewMode.value = 'editor'
+}
+
+async function openRouteDetail(routeId) {
+  libraryDetailLoading.value = true
+  error.value = ''
+
+  try {
+    libraryDetailRoute.value = await getRoute(routeId)
+  } catch (err) {
+    error.value = err.message || '加载路线详情失败。'
+  } finally {
+    libraryDetailLoading.value = false
+  }
+}
+
+async function removeSavedRoute(route) {
+  deletingRouteId.value = route.id
+  error.value = ''
+  notice.value = ''
+
+  try {
+    await deleteRoute(route.id)
+    if (libraryDetailRoute.value?.id === route.id) {
+      libraryDetailRoute.value = null
+    }
+    if (serverRouteId.value === route.id) {
+      clearCurrentDraft()
+    }
+    await loadSavedRoutes({ silent: true })
+    notice.value = `已删除路线：${route.title}`
+  } catch (err) {
+    error.value = err.message || '删除路线失败。'
+  } finally {
+    deletingRouteId.value = ''
   }
 }
 
@@ -419,7 +480,7 @@ function mergeLocalImages(serverPlaces, localPlaces) {
 
 function buildRoutePayload() {
   const payload = {
-    title: routeTitle.value,
+    title: routeTitle.value.trim(),
     city: city.value,
     travelMode: travelMode.value,
     places: places.value.map((place, index) => ({
@@ -519,7 +580,13 @@ function formatDate(value) {
 </script>
 
 <template>
-  <main class="app-layout">
+  <div class="app-shell">
+    <nav class="app-view-tabs" aria-label="应用视图">
+      <button type="button" :class="{ active: viewMode === 'editor' }" @click="showEditor">路线编辑</button>
+      <button type="button" :class="{ active: viewMode === 'library' }" @click="showRouteLibrary">旅游路线列表</button>
+    </nav>
+
+    <main v-if="viewMode === 'editor'" class="app-layout">
     <aside class="editor-panel">
       <div class="brand-block">
         <span class="eyebrow">Route Check-in</span>
@@ -593,9 +660,12 @@ function formatDate(value) {
       <section class="saved-routes">
         <div class="saved-routes-header">
           <span class="section-title">已保存路线</span>
-          <button class="ghost-button small" type="button" :disabled="loadingRoutes" @click="loadSavedRoutes">
-            {{ loadingRoutes ? '加载中' : '加载列表' }}
-          </button>
+          <div class="saved-route-tools">
+            <button class="ghost-button small" type="button" :disabled="loadingRoutes" @click="loadSavedRoutes">
+              {{ loadingRoutes ? '加载中' : '加载列表' }}
+            </button>
+            <button class="secondary-button small" type="button" @click="showRouteLibrary">查看全部路线</button>
+          </div>
         </div>
         <div v-if="savedRoutes.length" class="saved-route-list">
           <button
@@ -636,5 +706,23 @@ function formatDate(value) {
         @upload-place-image="uploadImageToServer"
       />
     </section>
-  </main>
+    </main>
+
+    <RouteLibrary
+      v-else
+      :deleting-route-id="deletingRouteId"
+      :detail-loading="libraryDetailLoading"
+      :detail-route="libraryDetailRoute"
+      :loading="loadingRoutes"
+      :routes="savedRoutes"
+      @close-detail="libraryDetailRoute = null"
+      @delete-route="removeSavedRoute"
+      @preview-image="previewImage = $event"
+      @refresh="loadSavedRoutes"
+      @view-detail="openRouteDetail"
+      @view-route="loadRouteFromServer"
+    />
+
+    <ImagePreviewModal :image="previewImage" @close="previewImage = null" />
+  </div>
 </template>

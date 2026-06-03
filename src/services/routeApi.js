@@ -15,10 +15,20 @@ export function createRoute(payload) {
   })
 }
 
+export function saveRoute(payload) {
+  return createRoute(payload)
+}
+
 export function updateRoute(id, payload) {
   return apiRequest(`/api/routes/${id}`, {
     method: 'PUT',
     body: JSON.stringify(payload),
+  })
+}
+
+export function deleteRoute(id) {
+  return apiRequest(`/api/routes/${id}`, {
+    method: 'DELETE',
   })
 }
 
