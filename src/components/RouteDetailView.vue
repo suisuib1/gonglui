@@ -27,6 +27,7 @@ const uploadErrors = ref({})
 const uploadNotices = ref({})
 const uploadingPlaceIds = ref(new Set())
 const deletingImageIds = ref(new Set())
+const fileInputs = ref({})
 
 function groupedImages(place, type) {
   return (place.images || []).filter((image) => normalizeImageType(image) === type && image.imageUrl)
@@ -91,6 +92,19 @@ function triggerUpload(event, place) {
   uploadImageForPlace(place, file)
 }
 
+function setFileInput(placeId, element) {
+  if (element) {
+    fileInputs.value[placeId] = element
+  } else {
+    delete fileInputs.value[placeId]
+  }
+}
+
+function triggerFilePicker(place) {
+  if (isUploading(place)) return
+  fileInputs.value[place.id]?.click()
+}
+
 async function uploadImageForPlace(place, file) {
   await uploadImagesForPlace(place, [file])
 }
@@ -106,7 +120,7 @@ function pasteImagesForPlace(event, place) {
 
   const files = extractClipboardImageFiles(event.clipboardData?.items || [])
   if (!files.length) {
-    setPlaceNotice(placeId, '剪贴板中没有可上传的图片')
+    setPlaceError(placeId, '剪贴板中没有可上传的图片')
     return
   }
 
@@ -139,7 +153,7 @@ async function uploadImagesForPlace(place, files) {
     for (const file of validFiles) {
       await uploadPlaceImage(placeId, file, uploadTypeFor(place))
     }
-    await refreshRouteFromServer('图片上传成功', placeId)
+    await refreshRouteFromServer(`已上传 ${validFiles.length} 张图片`, placeId)
   } catch (err) {
     setPlaceError(placeId, '图片上传失败，请重试')
   } finally {
@@ -214,6 +228,14 @@ function setBusy(targetRef, id, busy) {
 
 function isUploading(place) {
   return uploadingPlaceIds.value.has(place.id)
+}
+
+function uploadStatusText(place) {
+  return isUploading(place) ? '上传中...' : '点击上传，或 Ctrl + V 粘贴图片'
+}
+
+function uploadCategoryText(place) {
+  return IMAGE_TYPES.find((type) => type.value === uploadTypeFor(place))?.label || '其他'
 }
 
 function isDeletingImage(image) {
@@ -293,25 +315,49 @@ function isServerPlaceId(value) {
         <section
           class="detail-upload-panel"
           tabindex="0"
+          role="button"
+          aria-label="上传或粘贴图片"
+          :class="{ 'is-uploading': isUploading(place) }"
+          @click="triggerFilePicker(place)"
+          @keydown.enter.prevent="triggerFilePicker(place)"
+          @keydown.space.prevent="triggerFilePicker(place)"
           @paste="pasteImagesForPlace($event, place)"
         >
           <label class="field compact">
             <span>图片分类</span>
-            <select :value="uploadTypeFor(place)" :disabled="isUploading(place)" @change="setUploadType(place, $event.target.value)">
+            <select
+              :value="uploadTypeFor(place)"
+              :disabled="isUploading(place)"
+              @click.stop
+              @change="setUploadType(place, $event.target.value)"
+            >
               <option v-for="type in IMAGE_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
             </select>
           </label>
-          <label class="secondary-button detail-upload-button" :class="{ disabled: isUploading(place) }">
-            {{ isUploading(place) ? '上传中...' : '上传图片' }}
+          <div class="detail-upload-dropzone">
+            <span class="detail-upload-icon" aria-hidden="true">🖼️</span>
+            <div class="detail-upload-copy">
+              <strong>{{ uploadStatusText(place) }}</strong>
+              <span>当前分类：{{ uploadCategoryText(place) }}，单张不超过 5MB</span>
+              <small>会保存到当前选择的图片分类</small>
+            </div>
+            <button
+              class="secondary-button detail-upload-button"
+              type="button"
+              :disabled="isUploading(place)"
+              @click.stop="triggerFilePicker(place)"
+            >
+              {{ isUploading(place) ? '上传中...' : '上传图片' }}
+            </button>
             <input
+              :ref="(element) => setFileInput(place.id, element)"
               class="sr-only"
               type="file"
               accept="image/*"
               :disabled="isUploading(place)"
               @change="triggerUpload($event, place)"
             />
-          </label>
-          <p class="detail-upload-hint">点击上传图片，或将图片复制后粘贴到这里</p>
+          </div>
           <p v-if="uploadNotices[place.id]" class="notice-text detail-upload-message">{{ uploadNotices[place.id] }}</p>
           <p v-if="uploadErrors[place.id]" class="error-text detail-upload-message">{{ uploadErrors[place.id] }}</p>
         </section>
