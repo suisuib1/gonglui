@@ -36,7 +36,19 @@ defineProps({
   },
 })
 
-defineEmits(['close-detail', 'copy-share-link', 'delete-route', 'preview-image', 'refresh', 'share-route', 'view-detail', 'view-route'])
+defineEmits([
+  'close-detail',
+  'copy-share-link',
+  'delete-image',
+  'delete-route',
+  'edit-route',
+  'preview-image',
+  'refresh',
+  'route-updated',
+  'share-route',
+  'view-detail',
+  'view-route',
+])
 
 function travelModeText(mode) {
   if (mode === 'driving') return '驾车'
@@ -140,7 +152,10 @@ function formatDate(value) {
       :loading="detailLoading"
       :route="detailRoute"
       @close="$emit('close-detail')"
+      @delete-image="$emit('delete-image', $event)"
+      @edit-route="$emit('edit-route', $event)"
       @preview-image="$emit('preview-image', $event)"
+      @route-updated="$emit('route-updated', $event)"
       @share-route="$emit('share-route', $event)"
       @view-route="$emit('view-route', $event)"
     />

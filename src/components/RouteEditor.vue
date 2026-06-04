@@ -414,6 +414,21 @@ async function loadRouteFromServer(routeId) {
   }
 }
 
+async function loadRouteForViewing(routeId) {
+  error.value = ''
+  notice.value = ''
+
+  try {
+    const route = await getRoute(routeId)
+    applyServerRoute(route, { editingExisting: false })
+    saveCurrentDraft()
+    notice.value = '已加载路线到地图查看。需要修改时请点击“编辑路线”。'
+    viewMode.value = 'editor'
+  } catch (err) {
+    error.value = err.message || '加载路线详情失败。'
+  }
+}
+
 async function showRouteLibrary() {
   viewMode.value = 'library'
   await loadSavedRoutes({ silent: true })
@@ -434,6 +449,12 @@ async function openRouteDetail(routeId) {
   } finally {
     libraryDetailLoading.value = false
   }
+}
+
+async function syncLibraryDetailRoute(route) {
+  libraryDetailRoute.value = route
+  await loadSavedRoutes({ silent: true })
+  notice.value = '路线详情已同步最新图片。'
 }
 
 async function removeSavedRoute(route) {
@@ -842,9 +863,11 @@ function buildFrontendShareLink(share) {
       @delete-route="removeSavedRoute"
       @preview-image="previewImage = $event"
       @refresh="loadSavedRoutes"
+      @route-updated="syncLibraryDetailRoute"
       @share-route="shareSavedRoute"
       @view-detail="openRouteDetail"
-      @view-route="loadRouteFromServer"
+      @view-route="loadRouteForViewing"
+      @edit-route="loadRouteFromServer"
     />
 
     <ImagePreviewModal :image="previewImage" @close="previewImage = null" />

@@ -1,11 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
-
-const IMAGE_TYPES = [
-  { value: 'scenery', label: '景点图' },
-  { value: 'pose', label: '打卡姿势图' },
-  { value: 'other', label: '其他' },
-]
+import { deleteImage, getRoute, uploadPlaceImage } from '../services/routeApi'
+import { IMAGE_TYPES, normalizeImageType, validateImageFile } from '../utils/routeImages'
 
 const props = defineProps({
   route: {
@@ -18,7 +14,7 @@ const props = defineProps({
   },
 })
 
-defineEmits(['close', 'preview-image', 'share-route', 'view-route'])
+const emit = defineEmits(['close', 'delete-image', 'edit-route', 'preview-image', 'route-updated', 'share-route', 'view-route'])
 
 const imageCount = computed(() =>
   (props.route?.places || []).reduce((sum, place) => sum + (Array.isArray(place.images) ? place.images.length : 0), 0),
@@ -26,6 +22,11 @@ const imageCount = computed(() =>
 
 const hasPlannedRoute = computed(() => Array.isArray(props.route?.plannedSegments) && props.route.plannedSegments.length > 0)
 const failedImageIds = ref(new Set())
+const uploadTypes = ref({})
+const uploadErrors = ref({})
+const uploadNotices = ref({})
+const uploadingPlaceIds = ref(new Set())
+const deletingImageIds = ref(new Set())
 
 function groupedImages(place, type) {
   return (place.images || []).filter((image) => normalizeImageType(image) === type && image.imageUrl)
@@ -33,11 +34,6 @@ function groupedImages(place, type) {
 
 function placeImageCount(place) {
   return Array.isArray(place.images) ? place.images.length : 0
-}
-
-function normalizeImageType(image) {
-  const type = image.imageType || image.type || 'other'
-  return IMAGE_TYPES.some((item) => item.value === type) ? type : 'other'
 }
 
 function imageKey(image) {
@@ -74,6 +70,130 @@ function formatDate(value) {
 function imageName(image) {
   return image.name || image.originalName || 'route-image'
 }
+
+function uploadTypeFor(place) {
+  return uploadTypes.value[place.id] || 'scenery'
+}
+
+function setUploadType(place, type) {
+  uploadTypes.value = {
+    ...uploadTypes.value,
+    [place.id]: type,
+  }
+  clearPlaceMessage(place.id)
+}
+
+function triggerUpload(event, place) {
+  const file = event.target.files?.[0]
+  event.target.value = ''
+  if (!file) return
+
+  uploadImageForPlace(place, file)
+}
+
+async function uploadImageForPlace(place, file) {
+  const placeId = place?.id
+  clearPlaceMessage(placeId)
+
+  if (!props.route?.id || !isServerPlaceId(placeId)) {
+    setPlaceError(placeId, '请先保存路线到服务器，再上传地点图片。')
+    return
+  }
+
+  const validation = validateImageFile(file)
+  if (!validation.ok) {
+    setPlaceError(placeId, validation.message)
+    return
+  }
+
+  setBusy(uploadingPlaceIds, placeId, true)
+
+  try {
+    await uploadPlaceImage(placeId, file, uploadTypeFor(place))
+    await refreshRouteFromServer('图片已上传。', placeId)
+  } catch (err) {
+    setPlaceError(placeId, err.message || '图片上传失败。')
+  } finally {
+    setBusy(uploadingPlaceIds, placeId, false)
+  }
+}
+
+async function removeImageFromPlace(place, image) {
+  const placeId = place?.id
+  const targetImageId = image?.id
+  clearPlaceMessage(placeId)
+
+  if (!targetImageId) {
+    setPlaceError(placeId, '图片缺少服务器 ID，无法删除。')
+    return
+  }
+
+  setBusy(deletingImageIds, targetImageId, true)
+
+  try {
+    await deleteImage(targetImageId)
+    emit('delete-image', { placeId, imageId: targetImageId })
+    await refreshRouteFromServer('图片已删除。', placeId)
+  } catch (err) {
+    setPlaceError(placeId, err.message || '图片删除失败。')
+  } finally {
+    setBusy(deletingImageIds, targetImageId, false)
+  }
+}
+
+async function refreshRouteFromServer(message, placeId) {
+  const route = await getRoute(props.route.id)
+  setPlaceNotice(placeId, message)
+  emit('route-updated', route)
+}
+
+function clearPlaceMessage(placeId) {
+  if (!placeId) return
+  const nextErrors = { ...uploadErrors.value }
+  const nextNotices = { ...uploadNotices.value }
+  delete nextErrors[placeId]
+  delete nextNotices[placeId]
+  uploadErrors.value = nextErrors
+  uploadNotices.value = nextNotices
+}
+
+function setPlaceError(placeId, message) {
+  if (!placeId) return
+  uploadErrors.value = {
+    ...uploadErrors.value,
+    [placeId]: message,
+  }
+}
+
+function setPlaceNotice(placeId, message) {
+  if (!placeId) return
+  uploadNotices.value = {
+    ...uploadNotices.value,
+    [placeId]: message,
+  }
+}
+
+function setBusy(targetRef, id, busy) {
+  const next = new Set(targetRef.value)
+  if (busy) {
+    next.add(id)
+  } else {
+    next.delete(id)
+  }
+  targetRef.value = next
+}
+
+function isUploading(place) {
+  return uploadingPlaceIds.value.has(place.id)
+}
+
+function isDeletingImage(image) {
+  return deletingImageIds.value.has(image.id)
+}
+
+function isServerPlaceId(value) {
+  return /^c[a-z0-9]{20,}$/i.test(String(value || ''))
+}
 </script>
 
 <template>
@@ -89,6 +209,7 @@ function imageName(image) {
         <div class="detail-actions">
           <button class="secondary-button" type="button" @click="$emit('share-route', route.id)">分享</button>
           <button class="secondary-button" type="button" @click="$emit('view-route', route.id)">查看路线</button>
+          <button class="primary-button" type="button" @click="$emit('edit-route', route.id)">编辑路线</button>
           <button class="ghost-button" type="button" @click="$emit('close')">关闭详情</button>
         </div>
       </header>
@@ -140,6 +261,27 @@ function imageName(image) {
           <p>{{ place.note || '暂无备注' }}</p>
         </section>
 
+        <section class="detail-upload-panel">
+          <label class="field compact">
+            <span>图片分类</span>
+            <select :value="uploadTypeFor(place)" :disabled="isUploading(place)" @change="setUploadType(place, $event.target.value)">
+              <option v-for="type in IMAGE_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
+            </select>
+          </label>
+          <label class="secondary-button detail-upload-button" :class="{ disabled: isUploading(place) }">
+            {{ isUploading(place) ? '上传中...' : '上传图片' }}
+            <input
+              class="sr-only"
+              type="file"
+              accept="image/*"
+              :disabled="isUploading(place)"
+              @change="triggerUpload($event, place)"
+            />
+          </label>
+          <p v-if="uploadNotices[place.id]" class="notice-text detail-upload-message">{{ uploadNotices[place.id] }}</p>
+          <p v-if="uploadErrors[place.id]" class="error-text detail-upload-message">{{ uploadErrors[place.id] }}</p>
+        </section>
+
         <section class="album-groups">
           <div v-for="type in IMAGE_TYPES" :key="type.value" class="album-image-group">
             <div class="album-group-title">
@@ -147,18 +289,26 @@ function imageName(image) {
               <span>{{ groupedImages(place, type.value).length }}</span>
             </div>
             <div v-if="groupedImages(place, type.value).length" class="album-image-grid">
-              <button
-                v-for="image in groupedImages(place, type.value)"
-                :key="image.id"
-                class="album-thumb"
-                :class="{ 'is-broken': isImageFailed(image) }"
-                type="button"
-                @click="$emit('preview-image', image)"
-              >
-                <img v-if="!isImageFailed(image)" :src="image.imageUrl" :alt="imageName(image)" @error="markImageFailed(image)" />
-                <span v-else class="album-image-error">图片加载失败</span>
-                <span class="album-preview-hint">点击预览</span>
-              </button>
+              <div v-for="image in groupedImages(place, type.value)" :key="image.id" class="album-thumb-card">
+                <button
+                  class="album-thumb"
+                  :class="{ 'is-broken': isImageFailed(image) }"
+                  type="button"
+                  @click="$emit('preview-image', image)"
+                >
+                  <img v-if="!isImageFailed(image)" :src="image.imageUrl" :alt="imageName(image)" @error="markImageFailed(image)" />
+                  <span v-else class="album-image-error">图片加载失败</span>
+                  <span class="album-preview-hint">点击预览</span>
+                </button>
+                <button
+                  class="album-delete-button"
+                  type="button"
+                  :disabled="isDeletingImage(image)"
+                  @click="removeImageFromPlace(place, image)"
+                >
+                  {{ isDeletingImage(image) ? '删除中...' : '删除' }}
+                </button>
+              </div>
             </div>
             <div v-else class="album-empty">暂无图片</div>
           </div>
