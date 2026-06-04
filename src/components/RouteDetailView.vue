@@ -231,7 +231,7 @@ function isUploading(place) {
 }
 
 function uploadStatusText(place) {
-  return isUploading(place) ? '上传中...' : '点击上传，或 Ctrl + V 粘贴图片'
+  return isUploading(place) ? '上传中...' : '点击这里后按 Ctrl + V 粘贴图片'
 }
 
 function uploadCategoryText(place) {
@@ -314,33 +314,19 @@ function isServerPlaceId(value) {
 
         <section
           class="detail-upload-panel"
-          tabindex="0"
-          role="button"
-          aria-label="上传或粘贴图片"
           :class="{ 'is-uploading': isUploading(place) }"
-          @click="triggerFilePicker(place)"
-          @keydown.enter.prevent="triggerFilePicker(place)"
-          @keydown.space.prevent="triggerFilePicker(place)"
-          @paste="pasteImagesForPlace($event, place)"
         >
-          <label class="field compact">
-            <span>图片分类</span>
-            <select
-              :value="uploadTypeFor(place)"
-              :disabled="isUploading(place)"
-              @click.stop
-              @change="setUploadType(place, $event.target.value)"
-            >
-              <option v-for="type in IMAGE_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
-            </select>
-          </label>
-          <div class="detail-upload-dropzone">
-            <span class="detail-upload-icon" aria-hidden="true">🖼️</span>
-            <div class="detail-upload-copy">
-              <strong>{{ uploadStatusText(place) }}</strong>
-              <span>当前分类：{{ uploadCategoryText(place) }}，单张不超过 5MB</span>
-              <small>会保存到当前选择的图片分类</small>
-            </div>
+          <div class="detail-upload-controls">
+            <label class="field compact">
+              <span>图片分类</span>
+              <select
+                :value="uploadTypeFor(place)"
+                :disabled="isUploading(place)"
+                @change="setUploadType(place, $event.target.value)"
+              >
+                <option v-for="type in IMAGE_TYPES" :key="type.value" :value="type.value">{{ type.label }}</option>
+              </select>
+            </label>
             <button
               class="secondary-button detail-upload-button"
               type="button"
@@ -349,6 +335,7 @@ function isServerPlaceId(value) {
             >
               {{ isUploading(place) ? '上传中...' : '上传图片' }}
             </button>
+            <span class="detail-upload-limit">当前分类：{{ uploadCategoryText(place) }}，单张不超过 5MB</span>
             <input
               :ref="(element) => setFileInput(place.id, element)"
               class="sr-only"
@@ -357,6 +344,18 @@ function isServerPlaceId(value) {
               :disabled="isUploading(place)"
               @change="triggerUpload($event, place)"
             />
+          </div>
+          <div
+            class="detail-paste-zone"
+            tabindex="0"
+            @paste="pasteImagesForPlace($event, place)"
+          >
+            <span class="detail-upload-icon" aria-hidden="true">📋</span>
+            <div class="detail-upload-copy">
+              <strong>{{ uploadStatusText(place) }}</strong>
+              <span>会保存到当前选择的图片分类，单张不超过 5MB</span>
+              <small>当前分类：{{ uploadCategoryText(place) }}</small>
+            </div>
           </div>
           <p v-if="uploadNotices[place.id]" class="notice-text detail-upload-message">{{ uploadNotices[place.id] }}</p>
           <p v-if="uploadErrors[place.id]" class="error-text detail-upload-message">{{ uploadErrors[place.id] }}</p>

@@ -914,33 +914,28 @@ select:focus {
 
 .detail-upload-panel {
   display: grid;
-  grid-template-columns: minmax(150px, 210px) minmax(0, 1fr);
-  align-items: stretch;
-  gap: 12px;
-  border: 1px dashed #9fb1c8;
+  gap: 10px;
+  border: 1px solid #dbe3ef;
   border-radius: 8px;
-  padding: 14px;
-  background: #f8fbff;
-  cursor: pointer;
-  outline: none;
-  transition:
-    border-color 0.15s ease,
-    background-color 0.15s ease,
-    box-shadow 0.15s ease;
+  padding: 12px;
+  background: #fff;
 }
 
-.detail-upload-panel:hover,
-.detail-upload-panel:focus-within {
-  border-color: #2563eb;
-  background: #eff6ff;
-  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.14);
+.detail-upload-controls {
+  display: grid;
+  grid-template-columns: minmax(150px, 210px) auto minmax(180px, 1fr);
+  align-items: end;
+  gap: 12px;
 }
 
-.detail-upload-panel.is-uploading {
-  cursor: wait;
+.detail-upload-limit {
+  align-self: center;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
 }
 
-.detail-upload-panel.is-uploading .detail-upload-dropzone {
+.detail-upload-panel.is-uploading .detail-paste-zone {
   opacity: 0.72;
 }
 
@@ -952,16 +947,34 @@ select:focus {
   cursor: pointer;
 }
 
-.detail-upload-dropzone {
+.detail-paste-zone {
   display: grid;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   min-height: 92px;
-  border: 1px dashed #bfdbfe;
+  border: 1px dashed #9fb1c8;
   border-radius: 8px;
   padding: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  background: #f8fbff;
+  cursor: text;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.detail-paste-zone:hover {
+  border-color: #60a5fa;
+  background: #eff6ff;
+}
+
+.detail-paste-zone:focus,
+.detail-paste-zone:focus-visible {
+  border-color: #2563eb;
+  background: #eff6ff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.16);
 }
 
 .detail-upload-icon {
@@ -1349,7 +1362,8 @@ select:focus {
     grid-template-columns: 1fr;
   }
 
-  .detail-upload-dropzone {
+  .detail-upload-controls,
+  .detail-paste-zone {
     grid-template-columns: 1fr;
     justify-items: start;
   }
