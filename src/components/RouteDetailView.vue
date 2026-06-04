@@ -1,7 +1,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { deleteImage, getRoute, uploadPlaceImage } from '../services/routeApi'
-import { IMAGE_TYPES, normalizeImageType, validateImageFile } from '../utils/routeImages'
+import { extractClipboardImageFiles, IMAGE_TYPES, normalizeImageType, validateImageFile } from '../utils/routeImages'
 
 const props = defineProps({
   route: {
@@ -92,6 +92,29 @@ function triggerUpload(event, place) {
 }
 
 async function uploadImageForPlace(place, file) {
+  await uploadImagesForPlace(place, [file])
+}
+
+function pasteImagesForPlace(event, place) {
+  const placeId = place?.id
+  clearPlaceMessage(placeId)
+
+  if (isUploading(place)) {
+    event.preventDefault()
+    return
+  }
+
+  const files = extractClipboardImageFiles(event.clipboardData?.items || [])
+  if (!files.length) {
+    setPlaceNotice(placeId, '剪贴板中没有可上传的图片')
+    return
+  }
+
+  event.preventDefault()
+  uploadImagesForPlace(place, files)
+}
+
+async function uploadImagesForPlace(place, files) {
   const placeId = place?.id
   clearPlaceMessage(placeId)
 
@@ -100,19 +123,25 @@ async function uploadImageForPlace(place, file) {
     return
   }
 
-  const validation = validateImageFile(file)
-  if (!validation.ok) {
-    setPlaceError(placeId, validation.message)
-    return
+  const validFiles = []
+  for (const file of files) {
+    const validation = validateImageFile(file)
+    if (!validation.ok) {
+      setPlaceError(placeId, validation.message)
+      return
+    }
+    validFiles.push(file)
   }
 
   setBusy(uploadingPlaceIds, placeId, true)
 
   try {
-    await uploadPlaceImage(placeId, file, uploadTypeFor(place))
-    await refreshRouteFromServer('图片已上传。', placeId)
+    for (const file of validFiles) {
+      await uploadPlaceImage(placeId, file, uploadTypeFor(place))
+    }
+    await refreshRouteFromServer('图片上传成功', placeId)
   } catch (err) {
-    setPlaceError(placeId, err.message || '图片上传失败。')
+    setPlaceError(placeId, '图片上传失败，请重试')
   } finally {
     setBusy(uploadingPlaceIds, placeId, false)
   }
@@ -261,7 +290,11 @@ function isServerPlaceId(value) {
           <p>{{ place.note || '暂无备注' }}</p>
         </section>
 
-        <section class="detail-upload-panel">
+        <section
+          class="detail-upload-panel"
+          tabindex="0"
+          @paste="pasteImagesForPlace($event, place)"
+        >
           <label class="field compact">
             <span>图片分类</span>
             <select :value="uploadTypeFor(place)" :disabled="isUploading(place)" @change="setUploadType(place, $event.target.value)">
@@ -278,6 +311,7 @@ function isServerPlaceId(value) {
               @change="triggerUpload($event, place)"
             />
           </label>
+          <p class="detail-upload-hint">点击上传图片，或将图片复制后粘贴到这里</p>
           <p v-if="uploadNotices[place.id]" class="notice-text detail-upload-message">{{ uploadNotices[place.id] }}</p>
           <p v-if="uploadErrors[place.id]" class="error-text detail-upload-message">{{ uploadErrors[place.id] }}</p>
         </section>

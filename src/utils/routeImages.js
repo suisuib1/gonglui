@@ -27,6 +27,13 @@ export function validateImageFile(file) {
   }
 }
 
+export function extractClipboardImageFiles(items = []) {
+  return Array.from(items)
+    .filter((item) => item?.type?.startsWith('image/'))
+    .map((item) => item.getAsFile?.())
+    .filter(Boolean)
+}
+
 export function normalizeImageType(image = {}) {
   const type = image.imageType || image.type || 'other'
   return IMAGE_TYPES.some((item) => item.value === type) ? type : 'other'

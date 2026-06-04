@@ -921,6 +921,18 @@ select:focus {
   border-radius: 8px;
   padding: 12px;
   background: #fff;
+  outline: none;
+  transition:
+    border-color 0.15s ease,
+    background-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+.detail-upload-panel:hover,
+.detail-upload-panel:focus-within {
+  border-color: #93c5fd;
+  background: #f8fbff;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
 }
 
 .detail-upload-button {
@@ -934,9 +946,16 @@ select:focus {
   opacity: 0.65;
 }
 
-.detail-upload-message {
+.detail-upload-hint {
   margin: 0;
-  align-self: stretch;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.detail-upload-message {
+  grid-column: 1 / -1;
+  margin: 0;
 }
 
 .album-image-group {
