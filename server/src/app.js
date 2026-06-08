@@ -83,7 +83,7 @@ function buildCorsOptions(allowedOrigins) {
     optionsSuccessStatus: 204,
     preflightContinue: true,
     origin(origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes('*') || allowedOrigins.includes(origin)) {
         callback(null, true)
         return
       }

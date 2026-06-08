@@ -215,3 +215,33 @@ test('GET /api/debug/cors returns origin and active allowlist', async () => {
     }
   }
 })
+
+test('CORS_ORIGIN wildcard allows browser origins with credentials', async () => {
+  const previousOrigin = process.env.CORS_ORIGIN
+  process.env.CORS_ORIGIN = '*'
+  const corsApp = await createApp()
+  const server = corsApp.listen(0)
+
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}/api/routes/plan`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://gonglui-qd.pages.dev',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'Content-Type',
+      },
+    })
+
+    assert.equal(response.status, 204)
+    assert.equal(response.headers.get('access-control-allow-origin'), 'https://gonglui-qd.pages.dev')
+    assert.equal(response.headers.get('access-control-allow-credentials'), 'true')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+    if (previousOrigin === undefined) {
+      delete process.env.CORS_ORIGIN
+    } else {
+      process.env.CORS_ORIGIN = previousOrigin
+    }
+  }
+})
