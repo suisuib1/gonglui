@@ -163,6 +163,9 @@ test('CORS handles OPTIONS preflight for route planning', async () => {
     assert.equal(response.status, 204)
     assert.equal(response.headers.get('access-control-allow-origin'), 'https://gonglui-qd.pages.dev')
     assert.equal(response.headers.get('access-control-allow-credentials'), 'true')
+    assert.match(response.headers.get('access-control-allow-methods'), /\bPOST\b/)
+    assert.match(response.headers.get('access-control-allow-methods'), /\bOPTIONS\b/)
+    assert.match(response.headers.get('access-control-allow-headers'), /\bContent-Type\b/i)
   } finally {
     await new Promise((resolve) => server.close(resolve))
     if (previousOrigin === undefined) {
@@ -174,6 +177,41 @@ test('CORS handles OPTIONS preflight for route planning', async () => {
       delete process.env.NODE_ENV
     } else {
       process.env.NODE_ENV = previousNodeEnv
+    }
+  }
+})
+
+test('GET /api/debug/cors returns origin and active allowlist', async () => {
+  const previousOrigin = process.env.CORS_ORIGIN
+  delete process.env.CORS_ORIGIN
+  const corsApp = await createApp()
+  const server = corsApp.listen(0)
+
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}/api/debug/cors`, {
+      headers: {
+        Origin: 'https://gonglui-qd.pages.dev',
+      },
+    })
+    const payload = await response.json()
+
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('access-control-allow-origin'), 'https://gonglui-qd.pages.dev')
+    assert.equal(payload.ok, true)
+    assert.equal(payload.origin, 'https://gonglui-qd.pages.dev')
+    assert.deepEqual(payload.allowedOrigins, [
+      'http://localhost:5173',
+      'http://localhost:5174',
+      'http://localhost:3000',
+      'https://gonglui-qd.pages.dev',
+    ])
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+    if (previousOrigin === undefined) {
+      delete process.env.CORS_ORIGIN
+    } else {
+      process.env.CORS_ORIGIN = previousOrigin
     }
   }
 })
