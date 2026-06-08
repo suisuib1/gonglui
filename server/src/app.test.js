@@ -106,3 +106,74 @@ test('CORS allows configured origins and credentials', async () => {
     }
   }
 })
+
+test('CORS allows the Cloudflare Pages origin by default in production', async () => {
+  const previousOrigin = process.env.CORS_ORIGIN
+  const previousNodeEnv = process.env.NODE_ENV
+  delete process.env.CORS_ORIGIN
+  process.env.NODE_ENV = 'production'
+  const corsApp = await createApp()
+  const server = corsApp.listen(0)
+
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: {
+        Origin: 'https://gonglui-qd.pages.dev',
+      },
+    })
+
+    assert.equal(response.status, 200)
+    assert.equal(response.headers.get('access-control-allow-origin'), 'https://gonglui-qd.pages.dev')
+    assert.equal(response.headers.get('access-control-allow-credentials'), 'true')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+    if (previousOrigin === undefined) {
+      delete process.env.CORS_ORIGIN
+    } else {
+      process.env.CORS_ORIGIN = previousOrigin
+    }
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV
+    } else {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  }
+})
+
+test('CORS handles OPTIONS preflight for route planning', async () => {
+  const previousOrigin = process.env.CORS_ORIGIN
+  const previousNodeEnv = process.env.NODE_ENV
+  delete process.env.CORS_ORIGIN
+  process.env.NODE_ENV = 'production'
+  const corsApp = await createApp()
+  const server = corsApp.listen(0)
+
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}/api/routes/plan`, {
+      method: 'OPTIONS',
+      headers: {
+        Origin: 'https://gonglui-qd.pages.dev',
+        'Access-Control-Request-Method': 'POST',
+        'Access-Control-Request-Headers': 'content-type',
+      },
+    })
+
+    assert.equal(response.status, 204)
+    assert.equal(response.headers.get('access-control-allow-origin'), 'https://gonglui-qd.pages.dev')
+    assert.equal(response.headers.get('access-control-allow-credentials'), 'true')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+    if (previousOrigin === undefined) {
+      delete process.env.CORS_ORIGIN
+    } else {
+      process.env.CORS_ORIGIN = previousOrigin
+    }
+    if (previousNodeEnv === undefined) {
+      delete process.env.NODE_ENV
+    } else {
+      process.env.NODE_ENV = previousNodeEnv
+    }
+  }
+})
