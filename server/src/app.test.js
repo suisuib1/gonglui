@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { app } from './app.js'
+import { createApp } from './app.js'
+
+const app = await createApp()
 
 test('GET /api/health returns unified ok response without sensitive data', async () => {
   const server = app.listen(0)
@@ -76,5 +78,31 @@ test('POST /api/routes/optimize returns optimized order without amap web key for
     assert.deepEqual([...payload.data.optimizedOrder].sort((a, b) => a - b), [0, 1, 2])
   } finally {
     await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('CORS allows configured origins and credentials', async () => {
+  const previousOrigin = process.env.CORS_ORIGIN
+  process.env.CORS_ORIGIN = 'https://gonglui.pages.dev, https://www.example.com'
+  const corsApp = await createApp()
+  const server = corsApp.listen(0)
+
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`, {
+      headers: {
+        Origin: 'https://gonglui.pages.dev',
+      },
+    })
+
+    assert.equal(response.headers.get('access-control-allow-origin'), 'https://gonglui.pages.dev')
+    assert.equal(response.headers.get('access-control-allow-credentials'), 'true')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+    if (previousOrigin === undefined) {
+      delete process.env.CORS_ORIGIN
+    } else {
+      process.env.CORS_ORIGIN = previousOrigin
+    }
   }
 })
