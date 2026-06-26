@@ -1,3 +1,13 @@
 import { PrismaClient } from '@prisma/client'
 
-export const prisma = new PrismaClient()
+const defaultPrisma = new PrismaClient()
+
+export let prisma = defaultPrisma
+
+export function setPrismaClientForTests(client) {
+  prisma = client
+}
+
+export function resetPrismaClientForTests() {
+  prisma = defaultPrisma
+}

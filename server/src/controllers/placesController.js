@@ -37,6 +37,7 @@ export async function uploadPlaceImage(req, res) {
     const image = await prisma.placeImage.create({
       data: {
         placeId: req.params.id,
+        uploadedById: req.user.id,
         imageType,
         imageUrl: `/uploads/${storageKey}`,
         storageKey,

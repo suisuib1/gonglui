@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { createApp } from './app.js'
+import { buildErrorResponse, createApp, mapErrorToHttpStatus } from './app.js'
 
 const app = await createApp()
 
@@ -23,7 +23,7 @@ test('GET /api/health returns unified ok response without sensitive data', async
   }
 })
 
-test('POST /api/routes/plan returns polyline plan without amap web key', async () => {
+test('POST /api/routes/plan requires authentication', async () => {
   const server = app.listen(0)
 
   try {
@@ -41,19 +41,15 @@ test('POST /api/routes/plan returns polyline plan without amap web key', async (
     })
     const payload = await response.json()
 
-    assert.equal(response.status, 200)
-    assert.equal(payload.code, 0)
-    assert.equal(payload.data.travelMode, 'polyline')
-    assert.deepEqual(payload.data.segments[0].path, [
-      [120.1, 30.1],
-      [120.2, 30.2],
-    ])
+    assert.equal(response.status, 401)
+    assert.equal(payload.success, false)
+    assert.equal(payload.code, 'AUTH_REQUIRED')
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }
 })
 
-test('POST /api/routes/optimize returns optimized order without amap web key for polyline', async () => {
+test('POST /api/routes/optimize requires authentication', async () => {
   const server = app.listen(0)
 
   try {
@@ -72,10 +68,62 @@ test('POST /api/routes/optimize returns optimized order without amap web key for
     })
     const payload = await response.json()
 
-    assert.equal(response.status, 200)
-    assert.equal(payload.code, 0)
-    assert.equal(payload.data.optimizedOrder[0], 0)
-    assert.deepEqual([...payload.data.optimizedOrder].sort((a, b) => a - b), [0, 1, 2])
+    assert.equal(response.status, 401)
+    assert.equal(payload.success, false)
+    assert.equal(payload.code, 'AUTH_REQUIRED')
+  } finally {
+    await new Promise((resolve) => server.close(resolve))
+  }
+})
+
+test('maps Prisma string error codes to safe HTTP status numbers', () => {
+  assert.equal(mapErrorToHttpStatus({ code: 'P2025' }), 404)
+  assert.equal(mapErrorToHttpStatus({ code: 'P2002' }), 409)
+  assert.equal(mapErrorToHttpStatus({ code: 'P2003' }), 409)
+  assert.equal(mapErrorToHttpStatus({ code: 'P1001' }), 503)
+  assert.equal(mapErrorToHttpStatus({ code: 'P1002' }), 503)
+  assert.equal(mapErrorToHttpStatus({ code: 'P9999' }), 500)
+  assert.equal(mapErrorToHttpStatus({ code: 'P1001', statusCode: 418 }), 418)
+  assert.equal(mapErrorToHttpStatus({ code: 'P1001', statusCode: 'P1001' }), 503)
+  assert.equal(mapErrorToHttpStatus({ code: 422 }), 422)
+})
+
+test('builds production error responses without exposing stack traces', () => {
+  const error = new Error('database host and password details')
+  error.code = 'P1001'
+  error.stack = 'secret stack'
+
+  const payload = buildErrorResponse(error, 503, { nodeEnv: 'production' })
+
+  assert.deepEqual(payload, {
+    success: false,
+    message: '数据库暂时不可用，请稍后重试。',
+    code: 'DATABASE_UNAVAILABLE',
+    data: null,
+  })
+  assert.equal('stack' in payload, false)
+})
+
+test('POST /api/routes requires authentication before saving', async () => {
+  const server = app.listen(0)
+
+  try {
+    const { port } = server.address()
+    const response = await fetch(`http://127.0.0.1:${port}/api/routes`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: '',
+        city: '杭州',
+        travelMode: 'polyline',
+        places: [],
+      }),
+    })
+    const payload = await response.json()
+
+    assert.equal(response.status, 401)
+    assert.equal(payload.success, false)
+    assert.equal(payload.code, 'AUTH_REQUIRED')
   } finally {
     await new Promise((resolve) => server.close(resolve))
   }

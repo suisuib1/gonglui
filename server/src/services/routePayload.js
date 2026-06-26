@@ -2,12 +2,38 @@ const SERVER_ID_RE = /^c[a-z0-9]{20,}$/i
 const TRAVEL_MODES = new Set(['polyline', 'driving', 'walking'])
 const MAX_PLANNED_PATH_POINTS = 20000
 const MAX_PLANNED_SEGMENTS_JSON_LENGTH = 1_500_000
+const MAX_ROUTE_PLACES = 50
+const MIN_VALID_ROUTE_PLACES = 2
+const MAX_TITLE_LENGTH = 80
+const MAX_CITY_LENGTH = 50
+const MAX_PLACE_NAME_LENGTH = 100
+
+export class RoutePayloadValidationError extends Error {
+  constructor(message) {
+    super(message)
+    this.name = 'RoutePayloadValidationError'
+    this.statusCode = 400
+    this.publicCode = 'ROUTE_VALIDATION_ERROR'
+  }
+}
 
 export function normalizeRoutePayload(payload = {}, options = {}) {
-  const title = cleanString(payload.title) || '未命名路线'
-  const city = cleanString(payload.city) || '未设置城市'
+  const validateForSave = Boolean(options.validateForSave)
+  const title = cleanString(payload.title)
+  const city = cleanString(payload.city)
   const travelMode = cleanString(payload.travelMode) || 'polyline'
-  const places = Array.isArray(payload.places) ? payload.places : []
+  const places = normalizePlacesInput(payload.places, { validateForSave })
+
+  if (validateForSave) {
+    validateRouteFields({ title, city, travelMode, places })
+  }
+
+  const normalizedPlaces = places.map((place, index) => normalizePlace(place, index, { validateForSave }))
+
+  if (validateForSave) {
+    validateRoutePlaces(normalizedPlaces)
+  }
+
   const plannedSnapshot = normalizePlannedSnapshot(payload, {
     defaultTravelMode: travelMode,
     partialPlan: Boolean(options.partialPlan),
@@ -15,12 +41,12 @@ export function normalizeRoutePayload(payload = {}, options = {}) {
 
   return {
     route: {
-      title,
-      city,
+      title: validateForSave ? title : title || '未命名路线',
+      city: validateForSave ? city : city || '未设置城市',
       travelMode,
       ...plannedSnapshot,
     },
-    places: places.map((place, index) => normalizePlace(place, index)),
+    places: normalizedPlaces,
   }
 }
 
@@ -101,22 +127,85 @@ export function serializeImage(image) {
   }
 }
 
-function normalizePlace(place = {}, index) {
-  const name = cleanString(place.name || place.inputName) || `地点 ${index + 1}`
+function normalizePlacesInput(value, options = {}) {
+  if (Array.isArray(value)) return value
+  if (options.validateForSave) {
+    throwRouteValidation('地点列表必须是数组。')
+  }
+  return []
+}
+
+function validateRouteFields({ title, city, travelMode, places }) {
+  if (!title) throwRouteValidation('路线名称不能为空。')
+  if (title.length > MAX_TITLE_LENGTH) throwRouteValidation(`路线名称不能超过 ${MAX_TITLE_LENGTH} 个字符。`)
+  if (!city) throwRouteValidation('城市不能为空。')
+  if (city.length > MAX_CITY_LENGTH) throwRouteValidation(`城市不能超过 ${MAX_CITY_LENGTH} 个字符。`)
+  if (!TRAVEL_MODES.has(travelMode)) throwRouteValidation('路线模式只能是 polyline、driving 或 walking。')
+  if (places.length > MAX_ROUTE_PLACES) throwRouteValidation(`地点数量不能超过 ${MAX_ROUTE_PLACES} 个。`)
+  if (places.length < MIN_VALID_ROUTE_PLACES) throwRouteValidation(`至少需要 ${MIN_VALID_ROUTE_PLACES} 个有效经纬度地点。`)
+}
+
+function validateRoutePlaces(places) {
+  const validPlaceCount = places.filter((place) => Number.isFinite(place.longitude) && Number.isFinite(place.latitude)).length
+  if (validPlaceCount < MIN_VALID_ROUTE_PLACES) {
+    throwRouteValidation(`至少需要 ${MIN_VALID_ROUTE_PLACES} 个有效经纬度地点。`)
+  }
+}
+
+function normalizePlace(place = {}, index, options = {}) {
+  const name = cleanString(place.name || place.inputName)
   const rawId = cleanString(place.id || place.serverId)
+
+  if (options.validateForSave) {
+    validatePlaceName(name, index)
+  }
 
   return {
     clientId: cleanString(place.clientId || place.localId || place.id) || undefined,
     id: SERVER_ID_RE.test(rawId) ? rawId : undefined,
-    name,
+    name: options.validateForSave ? name : name || `地点 ${index + 1}`,
     address: nullableString(place.address),
-    longitude: nullableNumber(place.longitude ?? place.lng),
-    latitude: nullableNumber(place.latitude ?? place.lat),
+    longitude: normalizePlaceCoordinate(place.longitude ?? place.lng, {
+      index,
+      label: '经度',
+      min: -180,
+      max: 180,
+      validateForSave: options.validateForSave,
+    }),
+    latitude: normalizePlaceCoordinate(place.latitude ?? place.lat, {
+      index,
+      label: '纬度',
+      min: -90,
+      max: 90,
+      validateForSave: options.validateForSave,
+    }),
     sortOrder: normalizeOrder(place.sortOrder ?? place.order, index),
     note: nullableString(place.note),
     geocodeStatus: cleanString(place.geocodeStatus || place.status) || 'pending',
     amapPoiId: nullableString(place.amapPoiId),
   }
+}
+
+function validatePlaceName(name, index) {
+  if (!name) throwRouteValidation(`第 ${index + 1} 个地点名称不能为空。`)
+  if (name.length > MAX_PLACE_NAME_LENGTH) {
+    throwRouteValidation(`第 ${index + 1} 个地点名称不能超过 ${MAX_PLACE_NAME_LENGTH} 个字符。`)
+  }
+}
+
+function normalizePlaceCoordinate(value, options) {
+  const number = nullableNumber(value)
+  if (!options.validateForSave) return number
+
+  if (!Number.isFinite(number)) {
+    throwRouteValidation(`第 ${options.index + 1} 个地点${options.label}必须是合法数字。`)
+  }
+
+  if (number < options.min || number > options.max) {
+    throwRouteValidation(`第 ${options.index + 1} 个地点${options.label}必须在 ${options.min} 到 ${options.max} 之间。`)
+  }
+
+  return Number(number.toFixed(6))
 }
 
 function normalizePlannedSnapshot(payload, options) {
@@ -249,6 +338,10 @@ function nullableString(value) {
 
 function cleanString(value) {
   return String(value ?? '').trim()
+}
+
+function throwRouteValidation(message) {
+  throw new RoutePayloadValidationError(message)
 }
 
 function toIso(value) {

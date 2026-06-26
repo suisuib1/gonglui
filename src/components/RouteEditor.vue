@@ -22,6 +22,14 @@ import PlaceDetailPanel from './PlaceDetailPanel.vue'
 import PlaceList from './PlaceList.vue'
 import RouteLibrary from './RouteLibrary.vue'
 
+const props = defineProps({
+  user: {
+    type: Object,
+    default: null,
+  },
+})
+const emit = defineEmits(['logout'])
+
 const routeTitle = ref('杭州打卡路线')
 const city = ref('杭州')
 const rawPlacesText = ref('西湖\n灵隐寺，法喜寺、河坊街\n城市阳台')
@@ -56,6 +64,7 @@ const shareMessage = ref('')
 const activePlace = computed(() => places.value.find((place) => place.id === activePlaceId.value) || null)
 const hasCurrentPlan = computed(() => plannedSegments.value.length > 0 && !planStale.value)
 const editingRouteLabel = computed(() => (isEditingExistingRoute.value && currentRouteId.value ? routeTitle.value : ''))
+const currentUserLabel = computed(() => props.user?.displayName || props.user?.email || '已登录用户')
 
 onMounted(() => {
   const draft = loadDraft()
@@ -714,6 +723,10 @@ function buildFrontendShareLink(share) {
     <nav class="app-view-tabs" aria-label="应用视图">
       <button type="button" :class="{ active: viewMode === 'editor' }" @click="showEditor">路线编辑</button>
       <button type="button" :class="{ active: viewMode === 'library' }" @click="showRouteLibrary">旅游路线列表</button>
+      <div class="app-user-menu">
+        <span>{{ currentUserLabel }}</span>
+        <button class="ghost-button small" type="button" @click="emit('logout')">退出登录</button>
+      </div>
     </nav>
 
     <main v-if="viewMode === 'editor'" class="app-layout">

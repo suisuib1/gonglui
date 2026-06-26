@@ -8,6 +8,19 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  passwordHash   String
+  displayName    String?
+  role           String       @default("user")
+  status         String       @default("active")
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  routes         Route[]
+  uploadedImages PlaceImage[] @relation("UploadedImages")
+}
+
 model Route {
   id                String       @id @default(cuid())
   title             String
@@ -19,9 +32,13 @@ model Route {
   plannedAt         DateTime?
   shareToken        String?      @unique
   sharedAt          DateTime?
+  userId            String?
+  user              User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
   createdAt         DateTime     @default(now())
   updatedAt         DateTime     @updatedAt
   places            RoutePlace[]
+
+  @@index([userId, updatedAt])
 }
 
 model RoutePlace {
@@ -47,6 +64,8 @@ model PlaceImage {
   id           String     @id @default(cuid())
   placeId      String
   place        RoutePlace @relation(fields: [placeId], references: [id], onDelete: Cascade)
+  uploadedById String?
+  uploadedBy   User?      @relation("UploadedImages", fields: [uploadedById], references: [id], onDelete: SetNull)
   imageType    String
   imageUrl     String
   storageKey   String
@@ -56,4 +75,5 @@ model PlaceImage {
   createdAt    DateTime   @default(now())
 
   @@index([placeId, createdAt])
+  @@index([uploadedById, createdAt])
 }

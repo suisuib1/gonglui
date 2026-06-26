@@ -38,6 +38,189 @@ test('normalizes frontend route places for Prisma writes', () => {
   })
 })
 
+test('validates route save payload before Prisma writes', () => {
+  const result = normalizeRoutePayload(
+    {
+      title: '杭州路线',
+      city: '杭州',
+      travelMode: 'walking',
+      places: [
+        {
+          id: 'frontend-1',
+          name: '西湖',
+          lng: '120.1',
+          lat: '30.2',
+          order: 1,
+          status: 'success',
+        },
+        {
+          id: 'frontend-2',
+          name: '灵隐寺',
+          longitude: 120.12,
+          latitude: 30.24,
+          order: 2,
+          status: 'success',
+        },
+      ],
+    },
+    { validateForSave: true },
+  )
+
+  assert.equal(result.route.title, '杭州路线')
+  assert.equal(result.route.city, '杭州')
+  assert.equal(result.route.travelMode, 'walking')
+  assert.equal(result.places.length, 2)
+  assert.equal(result.places[0].longitude, 120.1)
+  assert.equal(result.places[0].latitude, 30.2)
+})
+
+test('rejects blank route title when saving a route', () => {
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '   ',
+          city: '杭州',
+          travelMode: 'polyline',
+          places: validRoutePlaces(),
+        },
+        { validateForSave: true },
+      ),
+    /路线名称不能为空/,
+  )
+})
+
+test('rejects invalid route travel mode when saving a route', () => {
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '杭州路线',
+          city: '杭州',
+          travelMode: 'bicycle',
+          places: validRoutePlaces(),
+        },
+        { validateForSave: true },
+      ),
+    /路线模式只能是 polyline、driving 或 walking/,
+  )
+})
+
+test('rejects non-array route places when saving a route', () => {
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '杭州路线',
+          city: '杭州',
+          travelMode: 'polyline',
+          places: '西湖',
+        },
+        { validateForSave: true },
+      ),
+    /地点列表必须是数组/,
+  )
+})
+
+test('rejects route saves with fewer than two valid coordinate places', () => {
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '杭州路线',
+          city: '杭州',
+          travelMode: 'polyline',
+          places: [{ name: '西湖', lng: 120.1, lat: 30.2 }],
+        },
+        { validateForSave: true },
+      ),
+    /至少需要 2 个有效经纬度地点/,
+  )
+})
+
+test('rejects route saves with invalid place coordinates instead of storing dirty data', () => {
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '杭州路线',
+          city: '杭州',
+          travelMode: 'polyline',
+          places: [
+            { name: '西湖', lng: 120.1, lat: 30.2 },
+            { name: '灵隐寺', lng: 200, lat: 30.24 },
+          ],
+        },
+        { validateForSave: true },
+      ),
+    /第 2 个地点经度必须在 -180 到 180 之间/,
+  )
+})
+
+test('rejects route saves with overlong title, city, or place names', () => {
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '杭'.repeat(81),
+          city: '杭州',
+          travelMode: 'polyline',
+          places: validRoutePlaces(),
+        },
+        { validateForSave: true },
+      ),
+    /路线名称不能超过 80 个字符/,
+  )
+
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '杭州路线',
+          city: '杭'.repeat(51),
+          travelMode: 'polyline',
+          places: validRoutePlaces(),
+        },
+        { validateForSave: true },
+      ),
+    /城市不能超过 50 个字符/,
+  )
+
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '杭州路线',
+          city: '杭州',
+          travelMode: 'polyline',
+          places: [{ name: '西'.repeat(101), lng: 120.1, lat: 30.2 }, validRoutePlaces()[1]],
+        },
+        { validateForSave: true },
+      ),
+    /第 1 个地点名称不能超过 100 个字符/,
+  )
+})
+
+test('rejects route saves with too many places', () => {
+  assert.throws(
+    () =>
+      normalizeRoutePayload(
+        {
+          title: '杭州路线',
+          city: '杭州',
+          travelMode: 'polyline',
+          places: Array.from({ length: 51 }, (_, index) => ({
+            name: `地点 ${index + 1}`,
+            lng: 120 + index / 1000,
+            lat: 30,
+          })),
+        },
+        { validateForSave: true },
+      ),
+    /地点数量不能超过 50 个/,
+  )
+})
+
 test('normalizes planned route snapshot for Prisma writes when provided', () => {
   const result = normalizeRoutePayload({
     title: 'Planned route',
@@ -230,3 +413,10 @@ test('serializes route list item without full planned segments', () => {
   assert.equal('plannedSegments' in item, false)
   assert.equal('shareToken' in item, false)
 })
+
+function validRoutePlaces() {
+  return [
+    { name: '西湖', lng: 120.1, lat: 30.2, order: 1, status: 'success' },
+    { name: '灵隐寺', lng: 120.12, lat: 30.24, order: 2, status: 'success' },
+  ]
+}

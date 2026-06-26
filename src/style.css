@@ -64,6 +64,35 @@ button:disabled {
   background: #2563eb;
 }
 
+.app-user-menu {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  color: #475569;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+  background: #eef2f7;
+}
+
+.login-panel {
+  display: grid;
+  gap: 16px;
+  width: min(420px, 100%);
+  border: 1px solid #d8e0ec;
+  border-radius: 8px;
+  padding: 24px;
+  background: #fff;
+  box-shadow: 0 24px 55px rgba(15, 23, 42, 0.12);
+}
+
 .app-layout {
   display: grid;
   grid-template-columns: 360px minmax(0, 1fr);

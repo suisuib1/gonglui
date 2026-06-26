@@ -1,4 +1,5 @@
 import { prisma } from '../lib/prisma.js'
+import { getRouteForUser, routeListWhere } from '../services/ownership.service.js'
 import { normalizeRoutePayload, serializeRoute, serializeRouteListItem } from '../services/routePayload.js'
 
 const routeInclude = {
@@ -13,10 +14,11 @@ const routeInclude = {
 }
 
 export async function createRoute(req, res) {
-  const normalized = normalizeRoutePayload(req.body)
+  const normalized = normalizeRoutePayload(req.body, { validateForSave: true })
   const route = await prisma.route.create({
     data: {
       ...normalized.route,
+      userId: req.user.id,
       places: {
         create: normalized.places.map(toPlaceCreateData),
       },
@@ -29,6 +31,7 @@ export async function createRoute(req, res) {
 
 export async function listRoutes(req, res) {
   const routes = await prisma.route.findMany({
+    where: routeListWhere(req.user),
     orderBy: { updatedAt: 'desc' },
     include: {
       places: {
@@ -50,10 +53,7 @@ export async function listRoutes(req, res) {
 }
 
 export async function getRoute(req, res) {
-  const route = await prisma.route.findUnique({
-    where: { id: req.params.id },
-    include: routeInclude,
-  })
+  const route = await getRouteForUser(prisma, req.params.id, req.user, { include: routeInclude })
 
   if (!route) {
     res.status(404).json(fail(404, '路线不存在'))
@@ -64,11 +64,10 @@ export async function getRoute(req, res) {
 }
 
 export async function updateRoute(req, res) {
-  const normalized = normalizeRoutePayload(req.body, { partialPlan: true })
+  const normalized = normalizeRoutePayload(req.body, { partialPlan: true, validateForSave: true })
 
   const route = await prisma.$transaction(async (tx) => {
-    const existing = await tx.route.findUnique({
-      where: { id: req.params.id },
+    const existing = await getRouteForUser(tx, req.params.id, req.user, {
       include: {
         places: {
           select: { id: true },

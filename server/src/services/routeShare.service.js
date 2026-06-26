@@ -1,4 +1,5 @@
 import { randomBytes as defaultRandomBytes } from 'node:crypto'
+import { canAccessOwnedRecord } from './ownership.service.js'
 import { serializeSharedRoute } from './routePayload.js'
 
 const SHARE_TOKEN_BYTES = 24
@@ -9,12 +10,14 @@ export async function ensureRouteShare(prisma, routeId, options = {}) {
     where: { id: routeId },
     select: {
       id: true,
+      userId: true,
       shareToken: true,
       sharedAt: true,
     },
   })
 
   if (!route) return null
+  if (options.user && !canAccessOwnedRecord(options.user, route)) return null
   if (route.shareToken) return buildSharePayload(route.shareToken)
 
   const randomBytes = options.randomBytes || defaultRandomBytes

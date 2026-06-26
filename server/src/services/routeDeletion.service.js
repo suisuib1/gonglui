@@ -1,10 +1,12 @@
 import { prisma } from '../lib/prisma.js'
 import { removeStoredFile } from './fileStorage.js'
+import { canAccessOwnedRecord } from './ownership.service.js'
 
 export async function deleteRouteAndUploads(routeId, options = {}) {
   const db = options.db || prisma
   const removeFile = options.removeFile || removeStoredFile
   const logger = options.logger || console
+  const user = options.user || null
 
   const route = await db.route.findUnique({
     where: { id: routeId },
@@ -24,6 +26,7 @@ export async function deleteRouteAndUploads(routeId, options = {}) {
   })
 
   if (!route) return null
+  if (user && !canAccessOwnedRecord(user, route)) return null
 
   try {
     await db.route.delete({

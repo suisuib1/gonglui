@@ -13,7 +13,7 @@ const routeInclude = {
 }
 
 export async function createRouteShare(req, res) {
-  const payload = await ensureRouteShare(prisma, req.params.id)
+  const payload = await ensureRouteShare(prisma, req.params.id, { user: req.user })
 
   if (!payload) {
     res.status(404).json(fail(404, 'route not found'))

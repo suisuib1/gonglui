@@ -1,7 +1,7 @@
 import { deleteRouteAndUploads } from '../services/routeDeletion.service.js'
 
 export async function deleteRoute(req, res) {
-  const deleted = await deleteRouteAndUploads(req.params.id)
+  const deleted = await deleteRouteAndUploads(req.params.id, { user: req.user })
 
   if (!deleted) {
     res.status(404).json(fail(404, '路线不存在'))
